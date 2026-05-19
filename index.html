@@ -352,10 +352,15 @@ function logout(){
   currentUser=null;isAdmin=false;
   document.getElementById("user-bar").style.display="none";
   document.getElementById("tabs").style.display="none";
-  ["ranking","pronosticos","partidos","avisos","perfil","admin"].forEach(p=>
-    document.getElementById(p+"-page").classList.remove("on"));
-  document.getElementById("login-page").classList.add("on");
-  document.getElementById("pw-modal").style.display="none";
+  document.getElementById("admin-tab").style.display="none";
+  ["ranking","pronosticos","partidos","avisos","perfil","admin"].forEach(p=>{
+    const el=document.getElementById(p+"-page");
+    if(el) el.classList.remove("on");
+  });
+  const lp=document.getElementById("login-page");
+  if(lp) lp.classList.add("on");
+  const pm=document.getElementById("pw-modal");
+  if(pm) pm.style.display="none";
   renderLogin();
 }
 
@@ -414,11 +419,21 @@ window.registrar=async function(){
 };
 
 window.checkAdmin=function(){
-  if(document.getElementById("admin-pw").value===ADMIN_PASS){
+  const pw=document.getElementById("admin-pw").value;
+  if(pw===ADMIN_PASS){
     isAdmin=true;
-    if(currentUser) document.getElementById("admin-tab").style.display="flex";
-    alert("Acceso admin concedido ✓");
-  } else alert("Contraseña incorrecta");
+    document.getElementById("admin-tab").style.display="flex";
+    document.getElementById("admin-pw").value="";
+    // If already logged in, show admin tab immediately
+    if(currentUser){
+      document.getElementById("admin-tab").style.display="flex";
+      alert("✅ Modo admin activado. Ya puedes ir a la pestaña Admin.");
+    } else {
+      alert("✅ Código admin correcto. Ahora selecciona tu nombre para entrar.");
+    }
+  } else {
+    alert("Contraseña incorrecta");
+  }
 };
 
 async function doLogin(name){
