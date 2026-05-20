@@ -419,6 +419,39 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
   </div>
 </div>
 
+
+<script>
+// Global function bridge - allows onclick="" to work with ES module
+(function(){
+  const _queue = {};
+  const _ready = {};
+  window._moduleReady = function(fns) {
+    Object.assign(_ready, fns);
+    // Execute any queued calls
+    Object.keys(_queue).forEach(fn => {
+      if(_ready[fn]) _queue[fn].forEach(args => _ready[fn](...args));
+      delete _queue[fn];
+    });
+  };
+  // Create proxy functions for all onclick handlers
+  ['go','logout','startLogin','loginConPw','cancelPw','registrar','checkAdmin',
+   'guardarPronosticos','guardarBracket','guardarReto','guardarAvatar','cambiarPw',
+   'showPlayerDetail','showBracketMatch','saveBracketPick','closeModal',
+   'renderCompare','showOnboarding','obNav','selectAvatar',
+   'enviarAviso','editarAviso','borrarAviso','guardarDeadline','borrarDeadline',
+   'toggleFase','toggleBracketLock','guardarPuntos','guardarTablas','guardarTerceros',
+   'guardarValidacion','guardarGrupos','guardarKO','guardarBote',
+   'crearReto','toggleReto','deleteReto','guardarGanadoresReto',
+   'añadirPenalizacion','quitarPenalizacion','cerrarRegistro','cerrarPronos',
+   'exportarDatos','resetPw','eliminarJugador'
+  ].forEach(fn => {
+    window[fn] = function(...args) {
+      if(_ready[fn]) return _ready[fn](...args);
+    };
+  });
+})();
+</script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch }
@@ -2343,6 +2376,31 @@ window.go=function(tab){
 // ═══ BOOT ════════════════════════════════════════════════
 listenMeta();
 loadPlayers();
+// Make all module functions globally accessible
+const _fns = {
+  go, logout, closeModal, showOnboarding, obNav,
+  startLogin: window.startLogin, loginConPw: window.loginConPw,
+  cancelPw: window.cancelPw, registrar: window.registrar, checkAdmin: window.checkAdmin,
+  guardarPronosticos: window.guardarPronosticos, guardarBracket: window.guardarBracket,
+  guardarReto: window.guardarReto, guardarAvatar: window.guardarAvatar,
+  cambiarPw: window.cambiarPw, showPlayerDetail: window.showPlayerDetail,
+  showBracketMatch: window.showBracketMatch, saveBracketPick: window.saveBracketPick,
+  renderCompare: window.renderCompare, selectAvatar: window.selectAvatar,
+  enviarAviso: window.enviarAviso, editarAviso: window.editarAviso,
+  borrarAviso: window.borrarAviso, guardarDeadline: window.guardarDeadline,
+  borrarDeadline: window.borrarDeadline, toggleFase: window.toggleFase,
+  toggleBracketLock: window.toggleBracketLock, guardarPuntos: window.guardarPuntos,
+  guardarTablas: window.guardarTablas, guardarTerceros: window.guardarTerceros,
+  guardarValidacion: window.guardarValidacion, guardarGrupos: window.guardarGrupos,
+  guardarKO: window.guardarKO, guardarBote: window.guardarBote,
+  crearReto: window.crearReto, toggleReto: window.toggleReto,
+  deleteReto: window.deleteReto, guardarGanadoresReto: window.guardarGanadoresReto,
+  añadirPenalizacion: window.añadirPenalizacion, quitarPenalizacion: window.quitarPenalizacion,
+  cerrarRegistro: window.cerrarRegistro, cerrarPronos: window.cerrarPronos,
+  exportarDatos: window.exportarDatos, resetPw: window.resetPw,
+  eliminarJugador: window.eliminarJugador,
+};
+window._moduleReady(_fns);
 </script>
 </body>
 </html>
