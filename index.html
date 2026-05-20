@@ -883,11 +883,11 @@ function computeGroupTable(player){
 
 function getAllBracket(){
   return [
-    ...BRACKET_R32.map(m=>{return{...m,phase:'R32'}});,
-    ...BRACKET_R16.map(m=>{return{...m,phase:'R16'}});,
-    ...BRACKET_QF.map(m=>{return{...m,phase:'QF'}});,
-    ...BRACKET_SF.map(m=>{return{...m,phase:'SF'}});,
-    ...BRACKET_FINAL.map(m=>{return{...m,phase:m.id==='M104'?'FINAL':'3RD'}});,
+    ...BRACKET_R32.map(m=>({...m,phase:'R32'})),
+    ...BRACKET_R16.map(m=>({...m,phase:'R16'})),
+    ...BRACKET_QF.map(m=>({...m,phase:'QF'})),
+    ...BRACKET_SF.map(m=>({...m,phase:'SF'})),
+    ...BRACKET_FINAL.map(m=>({...m,phase:m.id==='M104'?'FINAL':'3RD'})),
   ];
 }
 
