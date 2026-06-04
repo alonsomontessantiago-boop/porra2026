@@ -1434,27 +1434,29 @@ window.guardarPronosticos=async function(){
 function renderBracket(){
   if(!currentUser) return;
   const p=pronosticos[currentUser]||{};
-  const locked=p._locked||resultados.bracket_locked;
+  const locked=resultados.bracket_locked; // solo admin lock, independiente de rondas
 
-  // Pre-compute all R32 team pairs from player's predictions
   const r32teams = resolveR32Teams(currentUser);
-  const filledGroups = Object.values(r32teams).filter(pair=>pair[0]||pair[1]).length;
   const totalPredicted = GROUP_MATCHES.filter(m=>{
     const pm=p.partidos?.[m.id]; return pm&&pm.gl!=null&&pm.gv!=null;
   }).length;
 
-  // Resolve all bracket match teams
-  function getMatchTeams(m) {
-    if(m.phase==='R32') {
-      const pair = r32teams[m.id];
-      return pair || [null,null];
-    }
-    // R16+: use player's bracket picks or show source match winners
-    const myPick1 = p.bracket?.[m.m1];
-    const myPick2 = p.bracket?.[m.m2];
-    const t1 = myPick1 || (m.m1 ? `W-${m.m1}` : '?');
-    const t2 = myPick2 || (m.m2 ? `W-${m.m2}` : '?');
-    return [t1, t2];
+  // Get teams for any bracket match
+  function getTeamsForMatch(matchId, phase){
+    if(phase==='R32') return r32teams[matchId]||[null,null];
+    const m=ALL_BRACKET.find(x=>x.id===matchId);
+    if(!m||!m.m1||!m.m2) return [null,null];
+    return [p.bracket?.[m.m1]||null, p.bracket?.[m.m2]||null];
+  }
+
+  function teamBox(team, myPick, realWinner){
+    if(!team) return `<div class="bracket-team"><span style="color:var(--t3);font-size:10px">pendiente</span></div>`;
+    const isPick=myPick&&cmp(myPick,team);
+    const isReal=realWinner&&cmp(realWinner,team);
+    return `<div class="bracket-team ${isPick?'winner':''} ${isReal?'real-winner':''}">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85px;font-size:11px${isPick?';font-weight:700;color:var(--gold)':''}">${team}</span>
+      ${isPick&&isReal?'<span style="color:#4ade80;font-size:9px;flex-shrink:0">✓</span>':''}
+    </div>`;
   }
 
   const rounds=[
@@ -1465,55 +1467,69 @@ function renderBracket(){
     {key:'FINAL',label:'Final',matches:BRACKET_FINAL.map(m=>({...m,phase:m.id==='M104'?'FINAL':'3RD'}))},
   ];
 
-  function teamLabel(team) {
-    if(!team) return '<span style="color:var(--t3)">?</span>';
-    if(team.startsWith('W-')) return `<span style="color:var(--t3);font-size:10px">${team}</span>`;
-    return `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:88px">${team}</span>`;
-  }
-
-  const bracketHtml = rounds.map(r=>{
-    const matchesHtml = r.matches.map(m=>{
-      const [t1,t2] = getMatchTeams(m);
-      const myPick = p.bracket?.[m.id];
-      const realWinner = partidos['KO_'+m.id]?.ganador;
-      const hit = myPick && realWinner && cmp(myPick, realWinner);
-      // For R32, bracket pick = which of t1/t2 advances
-      const pickDisplay = myPick||null;
-      const isR32 = m.phase==='R32';
-      return `<div class="bracket-match" onclick="showBracketMatch('${m.id}')">
-        <div class="bracket-team ${pickDisplay&&cmp(pickDisplay,t1)?'winner':''} ${realWinner&&cmp(realWinner,t1)?'real-winner':''}">
-          ${teamLabel(t1)}
-          ${hit&&cmp(myPick,t1)?'<span style="color:#4ade80;font-size:9px">✓</span>':''}
-        </div>
-        <div style="font-size:8px;color:var(--t3);text-align:center;padding:1px 0;display:flex;align-items:center;justify-content:space-between;padding:2px 4px">
+  const bracketHtml=rounds.map(r=>{
+    const matchesHtml=r.matches.map(m=>{
+      const [t1,t2]=getTeamsForMatch(m.id,m.phase);
+      const myPick=p.bracket?.[m.id];
+      const realWinner=partidos['KO_'+m.id]?.ganador;
+      const isR32=m.phase==='R32';
+      const canPick=!locked&&!isR32;
+      return `<div class="bracket-match" style="${canPick&&(t1||t2)?'cursor:pointer;':''}" ${canPick&&(t1||t2)?`onclick="openBracketPick('${m.id}')"`:''}>${teamBox(t1,myPick,realWinner)}
+        <div style="font-size:8px;color:var(--t3);padding:2px 4px;display:flex;justify-content:space-between;align-items:center">
           <span>vs</span>
-          ${pickDisplay?`<span style="font-size:9px;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70px">→${pickDisplay}</span>`:'<span style="font-size:9px;color:var(--t3)">elige→</span>'}
+          ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`
+            :isR32?'<span style="font-size:9px;color:var(--t3)">auto</span>'
+            :'<span style="font-size:9px;color:var(--t3)">toca→</span>'}
         </div>
-        <div class="bracket-team ${pickDisplay&&cmp(pickDisplay,t2)?'winner':''} ${realWinner&&cmp(realWinner,t2)?'real-winner':''}">
-          ${teamLabel(t2)}
-          ${hit&&cmp(myPick,t2)?'<span style="color:#4ade80;font-size:9px">✓</span>':''}
-        </div>
-        ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:2px 4px">Real: ${realWinner}</div>`:''}
+        ${teamBox(t2,myPick,realWinner)}
+        ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:2px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
       </div>`;
     }).join('');
-    return `<div class="bracket-round">
-      <div class="bracket-round-title">${r.label}</div>
-      <div class="bracket-slots">${matchesHtml}</div>
-    </div>`;
+    return `<div class="bracket-round"><div class="bracket-round-title">${r.label}</div><div class="bracket-slots">${matchesHtml}</div></div>`;
   }).join('');
 
-  const infoBar = totalPredicted < 72
-    ? `<div class="banner banner-gold">⚠️ Tienes ${totalPredicted}/72 partidos de grupos pronosticados. El bracket se completa automáticamente al rellenarlos todos.</div>`
-    : `<div class="banner banner-green">✅ Bracket generado automáticamente desde tus ${totalPredicted} pronósticos de grupos</div>`;
+  const picksKO=ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&p.bracket?.[m.id]).length;
+  const totalKO=ALL_BRACKET.length-BRACKET_R32.length;
+  const infoBar=locked
+    ?`<div class="banner banner-gold">🔒 Bracket cerrado — solo lectura</div>`
+    :totalPredicted<72
+      ?`<div class="banner banner-gold">⚠️ ${totalPredicted}/72 partidos de grupos — los 16avos se completan al rellenarlos todos</div>`
+      :`<div class="banner banner-green">✅ 16avos calculados automáticamente · Picks: ${picksKO}/${totalKO}</div>`;
 
   document.getElementById('bracket-content').innerHTML=`
-    <p class="note">El bracket se genera solo desde tus pronósticos de grupos. Para R32 no hay que elegir nada. A partir de octavos, toca cada partido para elegir quién pasa. +${getPts('bracket')} pts por cada cruce acertado.</p>
+    <p class="note">Los 16avos se generan solos desde tus pronósticos de grupos. Toca cada partido de octavos en adelante para elegir quién pasa. Rellena todo ANTES del primer partido — no depende del sistema de rondas. +${getPts('bracket')} pts por cruce acertado.</p>
     ${infoBar}
-    <div class="bracket-wrap">
-      <div class="bracket">${bracketHtml}</div>
-    </div>
-    ${!locked?`<button class="btn btn-p btn-w" onclick="guardarBracket()">💾 Guardar bracket (octavos en adelante)</button>`:'<div class="banner banner-gold">🔒 Bracket cerrado</div>'}`;
+    <div class="bracket-wrap"><div class="bracket">${bracketHtml}</div></div>
+    ${!locked?`<button class="btn btn-p btn-w" style="margin-top:12px" onclick="guardarBracket()">💾 Guardar bracket</button>
+    <div id="save-bracket-ok" class="saved-ok">✅ Bracket guardado</div>`:''}`;
 }
+
+window.openBracketPick=function(matchId){
+  const p=pronosticos[currentUser]||{};
+  const m=ALL_BRACKET.find(x=>x.id===matchId)||{};
+  const t1=p.bracket?.[m.m1]||null;
+  const t2=p.bracket?.[m.m2]||null;
+  const cur=p.bracket?.[matchId];
+  if(!t1&&!t2){ showBracketMatch(matchId); return; }
+  const teams=[t1,t2].filter(Boolean);
+  document.getElementById('bm-title').textContent='🗂️ '+matchId+' — ¿Quién pasa?';
+  document.getElementById('bm-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      ${teams.map(t=>`<button class="btn ${cmp(cur,t)?'btn-g':'btn-s'}" style="padding:14px;font-size:13px;font-weight:700" onclick="selectBracketPick('${matchId}','${esc(t)}')">${t}${cmp(cur,t)?' ✓':''}</button>`).join('')}
+    </div>
+    <button class="btn btn-s btn-sm" onclick="closeModal('bracket-modal')">Cerrar</button>`;
+  document.getElementById('bracket-modal').style.display='flex';
+};
+
+window.selectBracketPick=async function(matchId,team){
+  const p={...pronosticos[currentUser]||{}};
+  if(!p.bracket) p.bracket={};
+  p.bracket[matchId]=team;
+  await savePronostico(currentUser,p);
+  closeModal('bracket-modal');
+  renderBracket();
+};
+
 
 window.showBracketMatch=function(matchId){
   const m=ALL_BRACKET.find(x=>x.id===matchId)||{};
