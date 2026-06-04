@@ -1548,11 +1548,13 @@ function renderBracket(){
 
   const picksKO=ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&p.bracket?.[m.id]).length;
   const totalKO=ALL_BRACKET.length-BRACKET_R32.length;
+  const lastSave=p._lastBracketSave;
+  const lastSaveStr=lastSave?(' · Guardado: '+fmtDate(lastSave)):'';
   const infoBar=locked
     ?`<div class="banner banner-gold">🔒 Bracket cerrado — solo lectura</div>`
     :totalPredicted<72
       ?`<div class="banner banner-gold">⚠️ ${totalPredicted}/72 partidos de grupos — los 16avos se completan al rellenarlos todos</div>`
-      :`<div class="banner banner-green">✅ 16avos calculados automáticamente · Picks: ${picksKO}/${totalKO}</div>`;
+      :`<div class="banner banner-green">✅ 16avos calculados · Picks KO: ${picksKO}/${totalKO}${lastSaveStr}</div>`;
 
   document.getElementById('bracket-content').innerHTML=`
     <p class="note">Los 16avos se generan solos desde tus pronósticos de grupos. Toca cada partido de octavos en adelante para elegir quién pasa. Rellena todo ANTES del primer partido — no depende del sistema de rondas. +${getPts('bracket')} pts por cruce acertado.</p>
@@ -1587,12 +1589,18 @@ window.openBracketPick=function(matchId){
   const cur=p.bracket?.[matchId];
   if(!t1&&!t2){ showBracketMatch(matchId); return; }
   const teams=[t1,t2].filter(Boolean);
-  document.getElementById('bm-title').textContent='🗂️ '+matchId+' — ¿Quién pasa?';
+  const sfLabel = matchId==='M101'?'SF1 (Dallas, 14 Jul)':matchId==='M102'?'SF2 (Atlanta, 15 Jul)':matchId==='M104'?'Final (MetLife, 19 Jul)':matchId==='M103'?'3er Puesto (Miami, 18 Jul)':'';
+  document.getElementById('bm-title').textContent='🗂️ '+matchId+(sfLabel?' — '+sfLabel:'');
   document.getElementById('bm-body').innerHTML=`
+    <p style="font-size:12px;color:var(--t2);margin-bottom:12px">Elige quién crees que pasa. Se guarda automáticamente.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      ${teams.map(t=>`<button class="btn ${cmp(cur,t)?'btn-g':'btn-s'}" style="padding:14px;font-size:13px;font-weight:700" onclick="selectBracketPick('${matchId}','${esc(t)}')">${t}${cmp(cur,t)?' ✓':''}</button>`).join('')}
+      ${teams.map(t=>`<button class="btn ${cmp(cur,t)?'btn-g':'btn-s'}" style="padding:14px;font-size:13px;font-weight:700;position:relative" onclick="selectBracketPick('${matchId}','${esc(t)}')">
+        ${t}
+        ${cmp(cur,t)?'<span style="position:absolute;top:4px;right:6px;font-size:10px">✓</span>':''}
+      </button>`).join('')}
     </div>
-    <button class="btn btn-s btn-sm" onclick="closeModal('bracket-modal')">Cerrar</button>`;
+    ${cur?`<div style="font-size:12px;color:#4ade80;text-align:center;margin-bottom:8px">✅ Tu pick actual: <strong>${cur}</strong></div>`:'<div style="font-size:12px;color:var(--t3);text-align:center;margin-bottom:8px">Sin pick todavía</div>'}
+    <button class="btn btn-s btn-sm" style="width:100%" onclick="closeModal('bracket-modal')">Cerrar sin cambiar</button>`;
   document.getElementById('bracket-modal').style.display='flex';
 };
 
@@ -1600,10 +1608,27 @@ window.selectBracketPick=async function(matchId,team){
   const p={...pronosticos[currentUser]||{}};
   if(!p.bracket) p.bracket={};
   p.bracket[matchId]=team;
+  p._lastBracketSave=new Date().toISOString();
   await savePronostico(currentUser,p);
   closeModal('bracket-modal');
   renderBracket();
+  // Show toast
+  showToast('✅ Guardado: '+team+' pasa a la siguiente ronda');
 };
+
+function showToast(msg){
+  let t=document.getElementById('bracket-toast');
+  if(!t){
+    t=document.createElement('div');
+    t.id='bracket-toast';
+    t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0d2e0d;color:#4ade80;border:1px solid #2da653;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;z-index:999;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;
+  t.style.opacity='1';
+  clearTimeout(t._timeout);
+  t._timeout=setTimeout(()=>t.style.opacity='0',2500);
+}
 
 
 window.showBracketMatch=function(matchId){
