@@ -500,7 +500,7 @@ for(const [g, teams] of Object.entries(GRUPOS)){
 }
 
 // Official FIFA bracket for Round of 32
-// M73-M88: Round of 32 (treintaidosavos)
+// M73-M88: Round of 32 (dieciseisavos)
 // Structure: {id, slot, desc} where desc shows the official matchup
 const BRACKET_R32 = [
   {id:"M73", desc:"2ºA vs 2ºB"},
@@ -523,14 +523,14 @@ const BRACKET_R32 = [
 
 // Octavos: winners of R32 pairs
 const BRACKET_R16 = [
-  {id:"M89", desc:"W73 vs W77", m1:"M73", m2:"M77"},
-  {id:"M90", desc:"W74 vs W75", m1:"M74", m2:"M75"},
-  {id:"M91", desc:"W76 vs W78", m1:"M76", m2:"M78"},
-  {id:"M92", desc:"W79 vs W80", m1:"M79", m2:"M80"},
-  {id:"M93", desc:"W83 vs W84", m1:"M83", m2:"M84"},
-  {id:"M94", desc:"W81 vs W82", m1:"M81", m2:"M82"},
-  {id:"M95", desc:"W86 vs W88", m1:"M86", m2:"M88"},
-  {id:"M96", desc:"W85 vs W87", m1:"M85", m2:"M87"},
+  {id:"M89", desc:"W74 vs W77", m1:"M74", m2:"M77"},  // 4 Jul - Philadelphia
+  {id:"M90", desc:"W73 vs W75", m1:"M73", m2:"M75"},  // 4 Jul - Houston
+  {id:"M91", desc:"W76 vs W78", m1:"M76", m2:"M78"},  // 5 Jul - MetLife
+  {id:"M92", desc:"W79 vs W80", m1:"M79", m2:"M80"},  // 5 Jul - Azteca
+  {id:"M93", desc:"W83 vs W84", m1:"M83", m2:"M84"},  // 6 Jul - Dallas
+  {id:"M94", desc:"W81 vs W82", m1:"M81", m2:"M82"},  // 6 Jul - Seattle
+  {id:"M95", desc:"W86 vs W88", m1:"M86", m2:"M88"},  // 7 Jul - Atlanta
+  {id:"M96", desc:"W85 vs W87", m1:"M85", m2:"M87"},  // 7 Jul - Vancouver
 ];
 
 // Cuartos
@@ -1288,7 +1288,7 @@ function renderPronosticos(){
   ['R32','R16','QF','SF','3RD','FINAL'].map(phase=>{
     const fk='fase_'+phase+'_abierta';
     const abierta=res[fk];
-    const phaseLabel={R32:'Treintaidosavos',R16:'Octavos',QF:'Cuartos',SF:'Semis',FINAL:'Final','3RD':'3er Puesto'}[phase];
+    const phaseLabel={R32:'Dieciseisavos',R16:'Octavos',QF:'Cuartos',SF:'Semis',FINAL:'Final','3RD':'3er Puesto'}[phase];
     if(!abierta) return `<div class="phase-hdr">${phaseLabel}</div>
       <div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;color:var(--t3);font-size:13px">🔒 Ronda bloqueada</div>`;
     const matches=getAllBracket().filter(m=>m.phase===phase);
@@ -1458,7 +1458,7 @@ function renderBracket(){
   }
 
   const rounds=[
-    {key:'R32',label:'32avos',matches:BRACKET_R32.map(m=>({...m,phase:'R32'}))},
+    {key:'R32',label:'16avos',matches:BRACKET_R32.map(m=>({...m,phase:'R32'}))},
     {key:'R16',label:'Octavos',matches:BRACKET_R16.map(m=>({...m,phase:'R16'}))},
     {key:'QF',label:'Cuartos',matches:BRACKET_QF.map(m=>({...m,phase:'QF'}))},
     {key:'SF',label:'Semis',matches:BRACKET_SF.map(m=>({...m,phase:'SF'}))},
@@ -1590,7 +1590,7 @@ window.showBracketMatch=function(matchId){
   }
 
   let html=`<div style="text-align:center;margin-bottom:14px;background:var(--s2);border-radius:8px;padding:12px">
-    <div style="font-size:11px;color:var(--t3);margin-bottom:4px">${isR32?'32avos':'Partido '+matchId}</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:4px">${isR32?'16avos':'Partido '+matchId}</div>
     <div style="font-size:15px;font-weight:700">${t1||'?'} <span style="color:var(--t3)">vs</span> ${t2||'?'}</div>
     ${myPick?`<div style="margin-top:6px;font-size:13px;color:var(--gold)">Tu pick: <strong>${myPick}</strong></div>`:''}
     ${realWinner?`<div style="margin-top:6px"><span class="badge badge-ok">✓ Real: ${realWinner}</span></div>`:''}
@@ -1599,7 +1599,7 @@ window.showBracketMatch=function(matchId){
   <div class="detail-cat">Pronósticos del grupo ${resultados.bracket_locked||isAdmin?'':'(visibles cuando el admin cierre el bracket)'}</div>
   ${resultados.bracket_locked||isAdmin?playerPredictions:`<div style="color:var(--t3);font-size:12px;padding:8px 0">Se mostrarán cuando el admin cierre el bracket</div>`}`;
 
-  document.getElementById('bm-title').textContent='🗂️ '+matchId+(isR32?' (32avos)':'');
+  document.getElementById('bm-title').textContent='🗂️ '+matchId+(isR32?' (16avos)':'');
   document.getElementById('bm-body').innerHTML=html;
   document.getElementById('bracket-modal').style.display='flex';
 };
@@ -1642,7 +1642,7 @@ function renderPartidos(){
   }
 
   // KO
-  const koPhaseLabel={R32:'Treintaidosavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'};
+  const koPhaseLabel={R32:'Dieciseisavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'};
   getAllBracket().forEach(m=>{
     const k='KO_'+m.id;
     const rm=partidos[k];
@@ -1864,7 +1864,7 @@ function renderNormas(){
       <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
     </div>
     <div class="norma-section"><h3>🗂️ Bracket (antes del Mundial)</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('bracket')}</span><span>Por cada cruce acertado en el bracket (desde treintaidosavos)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('bracket')}</span><span>Por cada cruce acertado en el bracket (desde dieciseisavos)</span></div>
     </div>
     <div class="norma-section"><h3>🏆 Clasificación final</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('campeon')}</span><span>Acertar el campeón del Mundial</span></div>
@@ -2048,7 +2048,7 @@ function renderAdmin(){
   // Fases toggle
   const fasesHtml=['R32','R16','QF','SF','3RD','FINAL'].map(fase=>{
     const fk='fase_'+fase+'_abierta'; const abierta=res[fk];
-    const faseLabel={R32:'Treintaidosavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'}[fase];
+    const faseLabel={R32:'Dieciseisavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'}[fase];
     return `<div style="background:var(--s2);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:13px;font-weight:700">${faseLabel}</div>
@@ -2511,7 +2511,7 @@ function checkRondaBanners(){
   let html='';
   for(const fase of ['R32','R16','QF','SF','3RD','FINAL']){
     if(resultados['fase_'+fase+'_abierta']){
-      const faseLabel={R32:'Treintaidosavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'}[fase];
+      const faseLabel={R32:'Dieciseisavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'}[fase];
       html+=`<div class="banner banner-green">🔓 ¡${faseLabel} abiertos! Rellena tus pronósticos.</div>`;
     }
   }
@@ -2524,7 +2524,7 @@ const OB_STEPS=[
   {emoji:'📋',title:'Pronósticos',text:'Antes del primer partido (11 Jun) rellena todos tus pronósticos: los 72 partidos de grupos, clasificados, campeón, goleadores y más. ¡Una vez cerrado no se puede editar!'},
   {emoji:'🗂️',title:'Tu Bracket',text:'Rellena tu bracket completo antes del Mundial. Por cada cruce que aciertes en la fase eliminatoria ganas +'+PTS_DEFAULT.bracket+' pts extra, además de los puntos de los pronósticos normales.'},
   {emoji:'🎯',title:'Cómo ganar puntos',text:'Resultado exacto: +'+PTS_DEFAULT.exacto_grupos+' pts. Solo quiniela (1/X/2): +'+PTS_DEFAULT.quiniela+' pts. Campeón: +'+PTS_DEFAULT.campeon+' pts. Semifinalista (pool): +'+PTS_DEFAULT.semi+' pts. ¡Hay muchas formas de puntuar!'},
-  {emoji:'🔒',title:'Fases eliminatorias',text:'Cuando terminen los grupos, el admin abrirá los Treintaidosavos. Antes de que empiece el primer partido de cada ronda, podrás meter tus pronósticos de esa ronda.'},
+  {emoji:'🔒',title:'Fases eliminatorias',text:'Cuando terminen los grupos, el admin abrirá los Dieciseisavos. Antes de que empiece el primer partido de cada ronda, podrás meter tus pronósticos de esa ronda.'},
   {emoji:'💰',title:'El bote',text:'Cada jugador pone 10€. El bote aparece en el ranking. ¡Que gane el mejor! Desempate: campeón acertado → más exactos → más aciertos eliminatorias.'},
 ];
 
