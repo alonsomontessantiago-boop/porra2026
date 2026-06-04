@@ -182,17 +182,18 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 
 /* BRACKET */
 .bracket-wrap{overflow-x:auto;padding:8px 0}
-.bracket{display:flex;gap:0;min-width:800px}
-.bracket-round{display:flex;flex-direction:column;min-width:140px;padding:0 6px}
+.bracket{display:flex;gap:0;min-width:900px}
+.bracket-round{display:flex;flex-direction:column;min-width:130px;padding:0 4px}
 .bracket-round-title{font-size:10px;font-weight:800;color:var(--gold);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
 .bracket-slots{display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:4px}
-.bracket-match{background:var(--s2);border:1px solid var(--brd);border-radius:7px;padding:5px 8px;cursor:pointer;transition:all .15s;position:relative}
+.bracket-match{background:var(--s2);border:1px solid var(--brd);border-radius:7px;padding:5px 8px;transition:all .15s;position:relative}
 .bracket-match:hover{border-color:var(--purple)}
-.bracket-team{font-size:11px;padding:2px 0;display:flex;align-items:center;gap:5px;color:var(--t2)}
-.bracket-team.winner{color:var(--t1);font-weight:700}
+.bracket-match.clickable{cursor:pointer}
+.bracket-team{font-size:11px;padding:2px 0;display:flex;align-items:center;justify-content:space-between;gap:5px;color:var(--t2)}
+.bracket-team.winner{color:var(--gold);font-weight:700}
 .bracket-team.real-winner{color:#4ade80;font-weight:700}
-.bracket-team.real-loser{color:var(--t3);text-decoration:line-through}
-.bracket-team-flag{font-size:12px}
+.bracket-center{display:flex;flex-direction:column;min-width:140px;padding:0 4px;justify-content:center;gap:8px}
+.bracket-center-title{font-size:10px;font-weight:800;color:var(--gold);text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
 
 /* STATS */
 .stat-card{background:var(--s2);border-radius:8px;padding:12px;text-align:center}
@@ -1446,6 +1447,21 @@ function renderBracket(){
     if(phase==='R32') return r32teams[matchId]||[null,null];
     const m=ALL_BRACKET.find(x=>x.id===matchId);
     if(!m||!m.m1||!m.m2) return [null,null];
+    if(phase==='3RD'){
+      // 3rd place: losers of both semis
+      // Loser of M101 = the team in M101 that the player did NOT pick to win
+      function getLoser(sfId){
+        const sf=ALL_BRACKET.find(x=>x.id===sfId);
+        if(!sf) return null;
+        const [sfT1,sfT2]=[p.bracket?.[sf.m1]||null, p.bracket?.[sf.m2]||null];
+        const winner=p.bracket?.[sfId];
+        if(!winner) return sfT1&&sfT2?'?':null;
+        if(cmp(winner,sfT1)) return sfT2;
+        if(cmp(winner,sfT2)) return sfT1;
+        return null;
+      }
+      return [getLoser('M101'), getLoser('M102')];
+    }
     return [p.bracket?.[m.m1]||null, p.bracket?.[m.m2]||null];
   }
 
@@ -1459,34 +1475,76 @@ function renderBracket(){
     </div>`;
   }
 
-  const rounds=[
-    {key:'R32',label:'16avos',matches:BRACKET_R32.map(m=>({...m,phase:'R32'}))},
-    {key:'R16',label:'Octavos',matches:BRACKET_R16.map(m=>({...m,phase:'R16'}))},
-    {key:'QF',label:'Cuartos',matches:BRACKET_QF.map(m=>({...m,phase:'QF'}))},
-    {key:'SF',label:'Semis',matches:BRACKET_SF.map(m=>({...m,phase:'SF'}))},
-    {key:'FINAL',label:'Final',matches:BRACKET_FINAL.map(m=>({...m,phase:m.id==='M104'?'FINAL':'3RD'}))},
-  ];
+  // Split bracket into LEFT half (M73-M80 side) and RIGHT half (M81-M88 side)
+  // Left: M73,M74,M75,M76,M77,M78,M79,M80 → M89,M90,M91,M92 → M97,M99 → M101,M102
+  // Right: M81,M82,M83,M84,M85,M86,M87,M88 → M93,M94,M95,M96 → M98,M100 → M101,M102
+  const leftR32  = ['M73','M74','M75','M76','M77','M78','M79','M80'];
+  const leftR16  = ['M89','M90','M91','M92'];
+  const leftQF   = ['M97','M99'];
+  const rightR32 = ['M81','M82','M83','M84','M85','M86','M87','M88'];
+  const rightR16 = ['M93','M94','M95','M96'];
+  const rightQF  = ['M98','M100'];
 
-  const bracketHtml=rounds.map(r=>{
-    const matchesHtml=r.matches.map(m=>{
-      const [t1,t2]=getTeamsForMatch(m.id,m.phase);
-      const myPick=p.bracket?.[m.id];
-      const realWinner=partidos['KO_'+m.id]?.ganador;
-      const isR32=m.phase==='R32';
-      const canPick=!locked&&!isR32;
-      return `<div class="bracket-match" style="${canPick&&(t1||t2)?'cursor:pointer;':''}" ${canPick&&(t1||t2)?`onclick="openBracketPick('${m.id}')"`:''}>${teamBox(t1,myPick,realWinner)}
-        <div style="font-size:8px;color:var(--t3);padding:2px 4px;display:flex;justify-content:space-between;align-items:center">
+  function matchCard(matchId, phase){
+    const [t1,t2]=getTeamsForMatch(matchId,phase);
+    const myPick=p.bracket?.[matchId];
+    const realWinner=partidos['KO_'+matchId]?.ganador;
+    const isR32=phase==='R32';
+    const canPick=!locked&&!isR32&&(t1||t2);
+    return `<div class="bracket-match${canPick?' clickable':''}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
+      ${teamBox(t1,myPick,realWinner)}
+      <div style="font-size:8px;color:var(--t3);padding:1px 4px;display:flex;justify-content:space-between;align-items:center">
+        <span>vs</span>
+        ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`
+          :isR32?'<span style="font-size:9px;color:var(--t3)">auto</span>'
+          :'<span style="font-size:9px;color:var(--t3)">toca→</span>'}
+      </div>
+      ${teamBox(t2,myPick,realWinner)}
+      ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
+    </div>`;
+  }
+
+  function roundCol(label, ids, phase){
+    return `<div class="bracket-round">
+      <div class="bracket-round-title">${label}</div>
+      <div class="bracket-slots">${ids.map(id=>matchCard(id,phase)).join('')}</div>
+    </div>`;
+  }
+
+  function centerMatch(matchId, phase, label){
+    const [t1,t2]=getTeamsForMatch(matchId,phase);
+    const myPick=p.bracket?.[matchId];
+    const realWinner=partidos['KO_'+matchId]?.ganador;
+    const canPick=!locked&&(t1||t2);
+    return `<div>
+      <div class="bracket-center-title">${label}</div>
+      <div class="bracket-match${canPick?' clickable':''}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
+        ${teamBox(t1,myPick,realWinner)}
+        <div style="font-size:8px;color:var(--t3);padding:1px 4px;display:flex;justify-content:space-between;">
           <span>vs</span>
-          ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`
-            :isR32?'<span style="font-size:9px;color:var(--t3)">auto</span>'
-            :'<span style="font-size:9px;color:var(--t3)">toca→</span>'}
+          ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`:'<span style="font-size:9px;color:var(--t3)">toca→</span>'}
         </div>
         ${teamBox(t2,myPick,realWinner)}
-        ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:2px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
-      </div>`;
-    }).join('');
-    return `<div class="bracket-round"><div class="bracket-round-title">${r.label}</div><div class="bracket-slots">${matchesHtml}</div></div>`;
-  }).join('');
+        ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
+      </div>
+    </div>`;
+  }
+
+  const bracketHtml=`
+    ${roundCol('16avos',leftR32,'R32')}
+    ${roundCol('Octavos',leftR16,'R16')}
+    ${roundCol('Cuartos',leftQF,'QF')}
+    <div class="bracket-center">
+      ${centerMatch('M101','SF','Semifinal 1')}
+      <div style="margin:4px 0;border-top:1px dashed var(--brd)"></div>
+      ${centerMatch('M103','3RD','3er Puesto')}
+      ${centerMatch('M104','FINAL','⭐ FINAL ⭐')}
+      <div style="margin:4px 0;border-top:1px dashed var(--brd)"></div>
+      ${centerMatch('M102','SF','Semifinal 2')}
+    </div>
+    ${roundCol('Cuartos',rightQF,'QF')}
+    ${roundCol('Octavos',rightR16,'R16')}
+    ${roundCol('16avos',rightR32,'R32')}`;
 
   const picksKO=ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&p.bracket?.[m.id]).length;
   const totalKO=ALL_BRACKET.length-BRACKET_R32.length;
@@ -1507,8 +1565,25 @@ function renderBracket(){
 window.openBracketPick=function(matchId){
   const p=pronosticos[currentUser]||{};
   const m=ALL_BRACKET.find(x=>x.id===matchId)||{};
-  const t1=p.bracket?.[m.m1]||null;
-  const t2=p.bracket?.[m.m2]||null;
+  const is3rd=matchId==='M103';
+  let t1,t2;
+  if(is3rd){
+    // Get losers of semis
+    function getLoser(sfId){
+      const sf=ALL_BRACKET.find(x=>x.id===sfId);
+      if(!sf) return null;
+      const st1=p.bracket?.[sf.m1]||null,st2=p.bracket?.[sf.m2]||null;
+      const winner=p.bracket?.[sfId];
+      if(!winner) return null;
+      if(cmp(winner,st1)) return st2;
+      if(cmp(winner,st2)) return st1;
+      return null;
+    }
+    t1=getLoser('M101'); t2=getLoser('M102');
+  } else {
+    t1=p.bracket?.[m.m1]||null;
+    t2=p.bracket?.[m.m2]||null;
+  }
   const cur=p.bracket?.[matchId];
   if(!t1&&!t2){ showBracketMatch(matchId); return; }
   const teams=[t1,t2].filter(Boolean);
