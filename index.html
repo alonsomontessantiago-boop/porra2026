@@ -1490,14 +1490,13 @@ function renderBracket(){
     const myPick=p.bracket?.[matchId];
     const realWinner=partidos['KO_'+matchId]?.ganador;
     const isR32=phase==='R32';
-    const canPick=!locked&&!isR32&&(t1||t2);
+    const canPick=!locked&&(t1||t2); // R32 also pickable
     return `<div class="bracket-match${canPick?' clickable':''}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
       ${teamBox(t1,myPick,realWinner)}
       <div style="font-size:8px;color:var(--t3);padding:1px 4px;display:flex;justify-content:space-between;align-items:center">
         <span>vs</span>
         ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`
-          :isR32?'<span style="font-size:9px;color:var(--t3)">auto</span>'
-          :'<span style="font-size:9px;color:var(--t3)">toca→</span>'}
+          :'<span style="font-size:9px;color:var(--t3)">elige→</span>'}
       </div>
       ${teamBox(t2,myPick,realWinner)}
       ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
@@ -1566,10 +1565,15 @@ function renderBracket(){
 window.openBracketPick=function(matchId){
   const p=pronosticos[currentUser]||{};
   const m=ALL_BRACKET.find(x=>x.id===matchId)||{};
+  const isR32=BRACKET_R32.some(x=>x.id===matchId);
   const is3rd=matchId==='M103';
   let t1,t2;
-  if(is3rd){
-    // Get losers of semis
+  if(isR32){
+    // R32: teams come from resolveR32Teams
+    const r32teams=resolveR32Teams(currentUser);
+    const pair=r32teams[matchId]||[null,null];
+    t1=pair[0]; t2=pair[1];
+  } else if(is3rd){
     function getLoser(sfId){
       const sf=ALL_BRACKET.find(x=>x.id===sfId);
       if(!sf) return null;
