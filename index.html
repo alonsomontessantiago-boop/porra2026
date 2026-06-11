@@ -286,6 +286,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
   <button class="tab" data-tab="retos" onclick="go('retos')">🎯 Retos</button>
   <button class="tab" data-tab="stats" onclick="go('stats')">📊 Stats</button>
   <button class="tab" data-tab="avisos" onclick="go('avisos')">📢 Avisos</button>
+  <button class="tab" data-tab="comparador" onclick="go('comparador')">👥 Pronós.</button>
   <button class="tab" data-tab="normas" onclick="go('normas')">📖 Normas</button>
   <button class="tab" data-tab="perfil" onclick="go('perfil')">👤 Perfil</button>
   <button id="admin-tab" class="tab" data-tab="admin" style="display:none" onclick="go('admin')">⚙️ Admin</button>
@@ -334,7 +335,10 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
   <div id="countdown-area"></div>
   <div id="ranking-banners"></div>
   <div id="bote-bar"></div>
-  <div class="sec">🏅 Clasificación en vivo</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <div class="sec" style="margin:0">🏅 Clasificación en vivo</div>
+  <button class="btn btn-s btn-sm" onclick="generarCaptura()">📸 Compartir</button>
+</div>
   <div id="ranking-content"><div class="spinner">Calculando...</div></div>
 </div>
 
@@ -381,6 +385,11 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 </div>
 
 <!-- PERFIL -->
+<div id="comparador-page" class="page">
+  <div class="sec">👥 Ver pronósticos</div>
+  <div id="comparador-content"></div>
+</div>
+
 <div id="perfil-page" class="page">
   <div class="sec">👤 Mi perfil</div>
   <div id="perfil-content"></div>
@@ -949,13 +958,11 @@ function calcPoints(player){
     const rm=partidos[k];
     if(!pm||!rm||rm.gl==null) return;
     const exacto=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
+    // Exacto y quiniela son ACUMULABLES (máx 14 pts por partido)
     if(exacto) add('exactos','Exacto '+m.local+'-'+m.visit+': '+pm.gl+'-'+pm.gv,getPts('exacto_grupos'));
-    else{
-      // Quiniela 1X2
-      const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
-      const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
-      if(resSign===proSign) add('quiniela','Quiniela '+m.local+'-'+m.visit+': '+proSign,getPts('quiniela'));
-    }
+    const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
+    const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
+    if(resSign===proSign) add('quiniela','Quiniela '+m.local+'-'+m.visit+': '+proSign,getPts('quiniela'));
   });
 
   // KO exactos + quién pasa (ronda a ronda pronos)
@@ -1425,6 +1432,18 @@ window.guardarPronosticos=async function(){
   });
   
   p._lastSave=new Date().toISOString();
+  // Track changes if reopened
+  const prev=pronosticos[currentUser]||{};
+  if(!prev._locked&&prev._historial){
+    const cambios=[];
+    ['campeon','semi1','semi2','semi3','semi4','tercero','gol1','gol2','gol3','balon1','balon2','balon3'].forEach(k=>{
+      if(prev[k]&&p[k]&&prev[k]!==p[k]) cambios.push({campo:k,antes:prev[k],despues:p[k]});
+    });
+    if(cambios.length){
+      if(!p._historial) p._historial=[];
+      p._historial.push({fecha:new Date().toISOString(),accion:'editado_tras_reapertura',cambios});
+    }
+  }
   await savePronostico(currentUser,p);
   const ok=document.getElementById('save-ok');
   if(ok){ ok.style.display='block'; setTimeout(()=>ok.style.display='none',2500); }
@@ -1809,8 +1828,16 @@ function renderRetos(){
       <p>${r.desc}</p>
       ${r.deadline?`<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Plazo: ${fmtDate(r.deadline)}</div>`:''}
       ${!cerrado?`<div class="field">
-        <input class="fi" type="text" id="reto-${r.id}" value="${esc(myRespuesta||'')}" placeholder="Tu respuesta...">
-        <button class="btn btn-p btn-sm" style="margin-top:6px" onclick="guardarReto('${r.id}')">Guardar respuesta</button>
+        ${(()=>{
+          const tipo=r.tipo||'texto';
+          if(tipo==='equipos') return `<select class="fi" id="reto-${r.id}"><option value="">Selecciona equipo...</option>${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(myRespuesta,t)?'selected':''}>${t}</option>`).join('')}</select>`;
+          if(tipo==='sino') return `<div style="display:flex;gap:8px"><button class="btn ${cmp(myRespuesta,'Sí')?'btn-g':'btn-s'} btn-sm" onclick="document.getElementById('reto-hidden-${r.id}').value='Sí';guardarReto('${r.id}')">Sí</button><button class="btn ${cmp(myRespuesta,'No')?'btn-danger':'btn-s'} btn-sm" onclick="document.getElementById('reto-hidden-${r.id}').value='No';guardarReto('${r.id}')">No</button><input type="hidden" id="reto-hidden-${r.id}" value="${esc(myRespuesta||'')}"></div>`;
+          if(tipo==='jugadores'||tipo==='multiple') return `<select class="fi" id="reto-${r.id}"><option value="">Selecciona...</option>${(r.opciones||[]).map(o=>`<option value="${esc(o)}" ${cmp(myRespuesta,o)?'selected':''}>${o}</option>`).join('')}</select>`;
+          if(tipo==='numero'||tipo==='rango') return `<input class="fi" type="number" id="reto-${r.id}" value="${esc(myRespuesta||'')}" placeholder="${tipo==='rango'?'Número entre 1-90':'Número...'}">`;
+          return `<input class="fi" type="text" id="reto-${r.id}" value="${esc(myRespuesta||'')}" placeholder="Tu respuesta...">`;
+        })()}
+        ${r.tipo!=='sino'?`<button class="btn btn-p btn-sm" style="margin-top:6px" onclick="guardarReto('${r.id}')">Guardar respuesta</button>`:''}
+        ${r.tipo==='sino'&&myRespuesta?`<div style="font-size:12px;color:#4ade80;margin-top:4px">✅ Tu respuesta: ${myRespuesta}</div>`:''}
       </div>`:myRespuesta?`<div class="note">Tu respuesta: <strong>${myRespuesta}</strong></div>`:''}`; 
   }).join('');
 }
@@ -2103,8 +2130,10 @@ function renderAdmin(){
           <div style="font-size:11px;color:var(--t3)">Relleno: ${pc.pct}% · Último: ${fmtDate(p._lastSave)}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-xs btn-s" onclick="resetPw('${esc(name)}')">Reset pw</button>
+        <button class="btn-xs ${(pronosticos[name]||{})._locked?'btn-g':'btn-danger'}" onclick="toggleReopenPronos('${esc(name)}')">${(pronosticos[name]||{})._locked?'🔓 Reabrir':'🔒 Cerrar'}</button>
+        <button class="btn-xs btn-s" onclick="verHistorial('${esc(name)}')">📋 Historial</button>
         <button class="btn-xs btn-danger" onclick="eliminarJugador('${esc(name)}')">🗑️</button>
       </div>
     </div>`;
@@ -2193,6 +2222,28 @@ function renderAdmin(){
         <div class="field"><label>Puntos</label><input class="fi" type="number" id="reto-pts" value="10" min="1"></div>
       </div>
       <div class="field"><label>Descripción</label><input class="fi" type="text" id="reto-desc" placeholder="Descripción..."></div>
+      <div class="field-row">
+        <div class="field"><label>Tipo de respuesta</label>
+          <select class="fi" id="reto-tipo">
+            <option value="texto">Texto libre</option>
+            <option value="equipos">Desplegable equipos</option>
+            <option value="jugadores">Desplegable jugadores (escribe opciones)</option>
+            <option value="sino">Sí / No</option>
+            <option value="numero">Número</option>
+            <option value="rango">Rango numérico</option>
+            <option value="multiple">Respuesta múltiple</option>
+          </select>
+        </div>
+        <div class="field"><label>Ganar por</label>
+          <select class="fi" id="reto-ganar">
+            <option value="exacto">Exacto</option>
+            <option value="cercano">Más cercano</option>
+            <option value="individual">Individual (múltiple)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Opciones desplegable (separadas por comas)</label>
+        <input class="fi" type="text" id="reto-opciones" placeholder="Ej: España, Francia, Brasil o Sí, No"></div>
       <div class="field"><label>Fecha límite</label><input class="fi" type="datetime-local" id="reto-deadline"></div>
       <button class="btn btn-p btn-sm" onclick="crearReto()">Lanzar reto</button>
     </div>
@@ -2202,6 +2253,7 @@ function renderAdmin(){
         <div style="display:flex;gap:6px">
           ${r.activo?`<button class="btn-xs btn-danger" onclick="toggleReto(${i},false)">Desactivar</button>`
             :`<button class="btn-xs btn-g" onclick="toggleReto(${i},true)">Activar</button>`}
+          <button class="btn-xs btn-s" onclick="editarReto(${i})">✏️</button>
           <button class="btn-xs btn-danger" onclick="deleteReto(${i})">🗑️</button>
         </div>
       </div>
@@ -2507,11 +2559,79 @@ window.crearReto=async function(){
   const desc=document.getElementById('reto-desc').value.trim();
   const pts=Number(document.getElementById('reto-pts').value)||10;
   const deadline=document.getElementById('reto-deadline').value;
+  const tipo=document.getElementById('reto-tipo').value;
+  const opciones=document.getElementById('reto-opciones').value.trim();
+  const ganarPor=document.getElementById('reto-ganar').value;
   if(!titulo) return alert('Escribe un título');
-  const newReto={id:'reto_'+Date.now(),titulo,desc,pts,deadline,activo:true,ganadores:{}};
+  const newReto={
+    id:'reto_'+Date.now(),titulo,desc,pts,deadline,activo:true,ganadores:{},
+    tipo,opciones:opciones?opciones.split(',').map(x=>x.trim()).filter(Boolean):[],
+    ganarPor
+  };
   const newRetos=[...retos,newReto];
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
+  document.getElementById('reto-titulo').value='';
+  document.getElementById('reto-desc').value='';
+  document.getElementById('reto-opciones').value='';
   alert('✅ Reto creado');
+};
+
+window.editarReto=function(idx){
+  const r=retos[idx];
+  document.getElementById('modal-title').textContent='✏️ Editar reto';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field"><label>Título</label><input class="fi" type="text" id="er-titulo" value="${esc(r.titulo)}"></div>
+    <div class="field"><label>Descripción</label><input class="fi" type="text" id="er-desc" value="${esc(r.desc||'')}"></div>
+    <div class="field-row">
+      <div class="field"><label>Puntos</label><input class="fi" type="number" id="er-pts" value="${r.pts}"></div>
+      <div class="field"><label>Fecha límite</label><input class="fi" type="datetime-local" id="er-deadline" value="${r.deadline||''}"></div>
+    </div>
+    <div class="field"><label>Tipo de respuesta</label>
+      <select class="fi" id="er-tipo">
+        <option value="texto" ${r.tipo==='texto'?'selected':''}>Texto libre</option>
+        <option value="equipos" ${r.tipo==='equipos'?'selected':''}>Desplegable equipos</option>
+        <option value="jugadores" ${r.tipo==='jugadores'?'selected':''}>Desplegable jugadores</option>
+        <option value="sino" ${r.tipo==='sino'?'selected':''}>Sí / No</option>
+        <option value="numero" ${r.tipo==='numero'?'selected':''}>Número</option>
+        <option value="rango" ${r.tipo==='rango'?'selected':''}>Rango numérico</option>
+        <option value="multiple" ${r.tipo==='multiple'?'selected':''}>Respuesta múltiple</option>
+      </select>
+    </div>
+    <div class="field"><label>Opciones (separadas por comas, para desplegable/jugadores/múltiple)</label>
+      <input class="fi" type="text" id="er-opciones" value="${esc((r.opciones||[]).join(', '))}">
+    </div>
+    <div class="field"><label>Ganar por</label>
+      <select class="fi" id="er-ganar">
+        <option value="exacto" ${r.ganarPor==='exacto'?'selected':''}>Exacto</option>
+        <option value="cercano" ${r.ganarPor==='cercano'?'selected':''}>Más cercano</option>
+        <option value="individual" ${r.ganarPor==='individual'?'selected':''}>Individual (múltiple)</option>
+      </select>
+    </div>
+    <div style="background:var(--s2);border-radius:8px;padding:10px;margin:10px 0;font-size:12px;color:var(--t2)">
+      ⚠️ Las respuestas ya enviadas (${Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length} jugadores) se conservan.
+    </div>
+    <button class="btn btn-p btn-w" onclick="guardarEdicionReto(${idx})">💾 Guardar cambios</button>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.guardarEdicionReto=async function(idx){
+  const newRetos=[...retos];
+  const r=newRetos[idx];
+  const opcStr=document.getElementById('er-opciones').value.trim();
+  newRetos[idx]={
+    ...r,
+    titulo:document.getElementById('er-titulo').value.trim(),
+    desc:document.getElementById('er-desc').value.trim(),
+    pts:Number(document.getElementById('er-pts').value)||r.pts,
+    deadline:document.getElementById('er-deadline').value,
+    tipo:document.getElementById('er-tipo').value,
+    opciones:opcStr?opcStr.split(',').map(x=>x.trim()).filter(Boolean):[],
+    ganarPor:document.getElementById('er-ganar').value,
+  };
+  await setDoc(doc(db,'meta','retos'),{list:newRetos});
+  closeModal('detail-modal');
+  renderAdmin();
+  alert('✅ Reto actualizado');
 };
 
 window.toggleReto=async function(idx,activo){
@@ -2555,6 +2675,51 @@ window.quitarPenalizacion=async function(player,idx){
   const res={...resultados};
   res.penalizaciones[player].splice(idx,1);
   await setDoc(doc(db,'meta','resultados'),res);
+};
+
+window.toggleReopenPronos=async function(name){
+  const p={...pronosticos[name]||{}};
+  const isLocked=p._locked;
+  if(isLocked){
+    // Reopen: save history before
+    if(!p._historial) p._historial=[];
+    p._historial.push({
+      fecha:new Date().toISOString(),
+      accion:'reabierto_por_admin',
+      snapshot:{
+        campeon:p.campeon,semi1:p.semi1,semi2:p.semi2,semi3:p.semi3,semi4:p.semi4,
+        tercero:p.tercero,gol1:p.gol1,balon1:p.balon1
+      }
+    });
+    delete p._locked;
+    await savePronostico(name,p);
+    alert(`✅ Pronósticos de ${name} reabiertos. Se cerrarán cuando tú lo decidas.`);
+  } else {
+    p._locked=true;
+    await savePronostico(name,p);
+    alert(`🔒 Pronósticos de ${name} cerrados.`);
+  }
+  renderAdmin();
+};
+
+window.verHistorial=function(name){
+  const p=pronosticos[name]||{};
+  const hist=p._historial||[];
+  let html='';
+  if(!hist.length){
+    html='<div style="color:var(--t3);font-size:13px">Sin cambios registrados</div>';
+  } else {
+    hist.slice().reverse().forEach(h=>{
+      html+=`<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:4px">${fmtDate(h.fecha)} — ${h.accion.replace(/_/g,' ')}</div>
+        ${h.snapshot?`<div style="font-size:12px;color:var(--t2)">Campeón: ${h.snapshot.campeon||'—'} · Gol1: ${h.snapshot.gol1||'—'} · Balón: ${h.snapshot.balon1||'—'}</div>`:''}
+        ${h.cambios?h.cambios.map(c=>`<div style="font-size:11px"><span style="color:#f87171">Antes: ${c.campo}=${c.antes}</span> → <span style="color:#4ade80">Ahora: ${c.despues}</span></div>`).join(''):''}
+      </div>`;
+    });
+  }
+  document.getElementById('modal-title').textContent='📋 Historial de '+name;
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('detail-modal').style.display='flex';
 };
 
 window.cerrarRegistro=async function(){
@@ -2674,10 +2839,149 @@ window.obNav=function(dir){
   renderObStep();
 };
 
+// ═══ COMPARADOR ═════════════════════════════════════════════════════════
+function renderComparador(){
+  const el=document.getElementById('comparador-content');
+  const names=Object.keys(players);
+  if(!names.length){el.innerHTML='<div class="empty">Sin participantes</div>';return;}
+
+  const p=pronosticos;
+  const res=resultados||{};
+
+  // Phase filter
+  const phase=window._compPhase||'all';
+  const selectedPlayers=window._compSelected||names;
+
+  // Check what's visible (admin closed phases)
+  const gruposClosed=res.registro_cerrado||Object.values(pronosticos).some(x=>x._locked);
+  const bracketClosed=res.bracket_locked;
+
+  // Build selector UI
+  const selectorHtml=`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Selecciona jugadores a comparar</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        ${names.map(n=>`<button class="btn ${selectedPlayers.includes(n)?'btn-p':'btn-s'} btn-sm" onclick="toggleCompPlayer('${esc(n)}')">${players[n]?.avatar||'⚽'} ${n}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${['all','grupos','premios','bracket'].map(f=>`<button class="btn ${phase===f?'btn-p':'btn-s'} btn-xs" onclick="setCompPhase('${f}')">${{all:'Todo',grupos:'Grupos',premios:'Premios',bracket:'Bracket'}[f]}</button>`).join('')}
+      </div>
+    </div>`;
+
+  if(selectedPlayers.length===0){
+    el.innerHTML=selectorHtml+'<div class="empty">Selecciona al menos un jugador</div>';
+    return;
+  }
+
+  // Build comparison table
+  function cell(val, refVal, isVisible){
+    if(!isVisible) return '<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:6px 4px">🔒</td>';
+    if(!val) return '<td style="color:var(--t3);text-align:center;font-size:11px;padding:6px 4px">—</td>';
+    // Check if all selected players have same value (coincidence)
+    const allVals=selectedPlayers.map(n=>(pronosticos[n]||{})[refVal]||'').filter(Boolean);
+    const allSame=allVals.length>1&&allVals.every(v=>cmp(v,allVals[0]));
+    const realVal=res[refVal];
+    const isHit=realVal&&cmp(val,realVal);
+    const isMiss=realVal&&!cmp(val,realVal);
+    const bg=allSame?'rgba(139,47,201,.2)':isHit?'rgba(45,166,83,.2)':isMiss?'rgba(232,50,50,.15)':'';
+    const color=isHit?'#4ade80':isMiss?'#f87171':'var(--t1)';
+    return `<td style="background:${bg};color:${color};text-align:center;font-size:11px;padding:6px 4px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}${isHit?' ✓':isMiss?' ✗':''}</td>`;
+  }
+
+  function headerRow(label){
+    return `<tr><th colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:11px;font-weight:700;padding:6px 8px;text-align:left">${label}</th></tr>`;
+  }
+
+  function dataRow(label, key, isVisible=true){
+    return `<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2)">${label}</td>
+      ${selectedPlayers.map(n=>cell((pronosticos[n]||{})[key], key, isVisible)).join('')}</tr>`;
+  }
+
+  let rows='';
+
+  if(phase==='all'||phase==='premios'){
+    rows+=headerRow('🏆 Clasificación final');
+    rows+=dataRow('Campeón',       'campeon',  gruposClosed);
+    rows+=dataRow('3er puesto',    'tercero',  gruposClosed);
+    rows+=dataRow('Semifinalista 1','semi1',   gruposClosed);
+    rows+=dataRow('Semifinalista 2','semi2',   gruposClosed);
+    rows+=dataRow('Semifinalista 3','semi3',   gruposClosed);
+    rows+=dataRow('Semifinalista 4','semi4',   gruposClosed);
+    rows+=headerRow('⚽ Goleadores / Asistentes / Balón');
+    rows+=dataRow('1er goleador',  'gol1',    gruposClosed);
+    rows+=dataRow('2º goleador',   'gol2',    gruposClosed);
+    rows+=dataRow('3er goleador',  'gol3',    gruposClosed);
+    rows+=dataRow('1er asistente', 'asist1',  gruposClosed);
+    rows+=dataRow('Balón de Oro',  'balon1',  gruposClosed);
+    rows+=dataRow('Balón de Plata','balon2',  gruposClosed);
+    rows+=dataRow('Balón de Bronce','balon3', gruposClosed);
+  }
+
+  if(phase==='all'||phase==='grupos'){
+    rows+=headerRow('📊 Grupos');
+    Object.keys(GRUPOS).forEach(g=>{
+      rows+=dataRow(`Grupo ${g} — 1º`, `g${g}1`, gruposClosed);
+      rows+=dataRow(`Grupo ${g} — 2º`, `g${g}2`, gruposClosed);
+    });
+    rows+=headerRow('🎯 Mejores terceros');
+    for(let i=1;i<=8;i++) rows+=dataRow(`Tercero ${i}`, `tercero_pool_${i}`, gruposClosed);
+  }
+
+  if(phase==='all'||phase==='bracket'){
+    rows+=headerRow('🗂️ Bracket — picks KO');
+    const koMatches=[...BRACKET_R32,...BRACKET_R16,...BRACKET_QF,...BRACKET_SF,...BRACKET_FINAL];
+    koMatches.forEach(m=>{
+      const isVisible=bracketClosed||isAdmin;
+      const label=m.desc||m.id;
+      // For bracket, get each player's pick
+      const row=`<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2)">${label}</td>
+        ${selectedPlayers.map(n=>{
+          const pick=(pronosticos[n]||{}).bracket?.[m.id];
+          const realW=partidos['KO_'+m.id]?.ganador;
+          const isHit=pick&&realW&&cmp(pick,realW);
+          const isMiss=pick&&realW&&!cmp(pick,realW);
+          if(!isVisible) return '<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:6px 4px">🔒</td>';
+          return `<td style="background:${isHit?'rgba(45,166,83,.2)':isMiss?'rgba(232,50,50,.15)':'var(--s2)'};color:${isHit?'#4ade80':isMiss?'#f87171':'var(--t1)'};text-align:center;font-size:11px;padding:6px 4px">${pick||'—'}${isHit?' ✓':isMiss?' ✗':''}</td>`;
+        }).join('')}</tr>`;
+      rows+=row;
+    });
+  }
+
+  const tableHtml=`
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:${200+selectedPlayers.length*110}px">
+        <thead>
+          <tr style="background:var(--gd)">
+            <th style="padding:8px;font-size:11px;color:var(--t3);text-align:left;min-width:130px">Pronóstico</th>
+            ${selectedPlayers.map(n=>`<th style="padding:6px 4px;font-size:11px;color:var(--gold);text-align:center;min-width:100px">${players[n]?.avatar||'⚽'}<br>${n}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:8px;text-align:center">
+      🟣 Todos coinciden · 🟢 Acierto · 🔴 Fallo · 🔒 No visible aún
+    </div>`;
+
+  el.innerHTML=selectorHtml+tableHtml;
+}
+
+window.toggleCompPlayer=function(name){
+  if(!window._compSelected) window._compSelected=[...Object.keys(players)];
+  const idx=window._compSelected.indexOf(name);
+  if(idx>=0) window._compSelected.splice(idx,1);
+  else window._compSelected.push(name);
+  renderComparador();
+};
+window.setCompPhase=function(phase){
+  window._compPhase=phase;
+  renderComparador();
+};
+
 // ═══ NAV ════════════════════════════════════════════════
 window.go=function(tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
-  ['ranking','pronosticos','bracket','partidos','retos','stats','avisos','normas','perfil','admin'].forEach(p=>{
+  ['ranking','pronosticos','bracket','partidos','retos','stats','avisos','normas','perfil','comparador','admin'].forEach(p=>{
     document.getElementById(p+'-page').classList.toggle('on',p===tab);
   });
   if(tab==='ranking'){ renderRanking(); checkRondaBanners(); }
@@ -2689,7 +2993,95 @@ window.go=function(tab){
   else if(tab==='avisos') renderAvisos();
   else if(tab==='normas') renderNormas();
   else if(tab==='perfil') renderPerfil();
+  else if(tab==='comparador') renderComparador();
   else if(tab==='admin') renderAdmin();
+};
+
+// ═══ CAPTURA PNG ══════════════════════════════════════════════════════
+window.generarCaptura=function(){
+  const names=Object.keys(players);
+  const ranked=names.map(n=>({n,p:calcPoints(n)})).sort((a,b)=>desempate(b.p,b.n)-desempate(a.p,a.n));
+  const medals=['🥇','🥈','🥉'];
+  const now=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Madrid'});
+  
+  // Create canvas
+  const canvas=document.createElement('canvas');
+  const W=520, ROW=52, PAD=20;
+  canvas.width=W;
+  canvas.height=PAD*2+60+ranked.length*ROW+40;
+  const ctx=canvas.getContext('2d');
+  
+  // Background
+  const grad=ctx.createLinearGradient(0,0,W,canvas.height);
+  grad.addColorStop(0,'#3d006b');
+  grad.addColorStop(0.5,'#8b1a1a');
+  grad.addColorStop(1,'#bf5500');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,canvas.height);
+  
+  // Header
+  ctx.fillStyle='#e8a820';
+  ctx.font='bold 22px system-ui';
+  ctx.textAlign='center';
+  ctx.fillText('🏆 Porra Mundial 2026',W/2,PAD+28);
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font='13px system-ui';
+  ctx.fillText(now,W/2,PAD+48);
+  
+  // Rows
+  ranked.forEach(({n,p},i)=>{
+    const y=PAD+60+i*ROW;
+    const bg=i===0?'rgba(255,215,0,0.15)':i===1?'rgba(192,192,192,0.1)':i===2?'rgba(205,127,50,0.1)':'rgba(255,255,255,0.04)';
+    
+    // Row bg
+    ctx.fillStyle=bg;
+    ctx.beginPath();
+    ctx.roundRect(PAD,y+4,W-PAD*2,ROW-6,8);
+    ctx.fill();
+    
+    // Medal/rank
+    ctx.font='bold 18px system-ui';
+    ctx.textAlign='left';
+    ctx.fillStyle=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'rgba(255,255,255,0.4)';
+    ctx.fillText(medals[i]||(i+1)+'.',PAD+10,y+ROW/2+7);
+    
+    // Avatar
+    ctx.font='20px system-ui';
+    ctx.fillText(players[n]?.avatar||'⚽',PAD+45,y+ROW/2+8);
+    
+    // Name
+    ctx.font='bold 15px system-ui';
+    ctx.fillStyle='#f0e6ff';
+    ctx.fillText(n,PAD+80,y+ROW/2+6);
+    
+    // Points
+    ctx.font='bold 18px system-ui';
+    ctx.textAlign='right';
+    ctx.fillStyle='#4ade80';
+    ctx.fillText(p.total+' pts',W-PAD-10,y+ROW/2+7);
+  });
+  
+  // Footer
+  ctx.fillStyle='rgba(255,255,255,0.25)';
+  ctx.font='11px system-ui';
+  ctx.textAlign='center';
+  ctx.fillText('alonsomontessantiago-boop.github.io/porra2026',W/2,canvas.height-10);
+  
+  // Show modal with image
+  const imgData=canvas.toDataURL('image/png');
+  document.getElementById('modal-title').textContent='📸 Compartir ranking';
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Mantén pulsada la imagen para guardarla o compartirla por WhatsApp.</p>
+    <img src="${imgData}" style="width:100%;border-radius:8px;display:block" alt="Ranking Porra Mundial 2026">
+    <button class="btn btn-p btn-w" style="margin-top:10px" onclick="descargarCaptura('${imgData}')">💾 Descargar PNG</button>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.descargarCaptura=function(imgData){
+  const a=document.createElement('a');
+  a.href=imgData;
+  a.download='ranking_porra2026_'+new Date().toISOString().split('T')[0]+'.png';
+  a.click();
 };
 
 // ═══ BOOT ════════════════════════════════════════════════
