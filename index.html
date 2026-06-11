@@ -2918,11 +2918,56 @@ function renderComparador(){
   }
 
   if(phase==='all'||phase==='grupos'){
-    rows+=headerRow('📊 Grupos');
+    // ── Marcadores de partidos ──────────────────────────────────────────
+    rows+=headerRow('⚽ Marcadores pronosticados');
     Object.keys(GRUPOS).forEach(g=>{
-      rows+=dataRow(`Grupo ${g} — 1º`, `g${g}1`, gruposClosed);
-      rows+=dataRow(`Grupo ${g} — 2º`, `g${g}2`, gruposClosed);
+      rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:10px;font-weight:700;padding:4px 8px">Grupo ${g}</td></tr>`;
+      GROUP_MATCHES.filter(m=>m.grupo===g).forEach(m=>{
+        const rm=partidos[m.id];
+        const realGl=rm?.gl; const realGv=rm?.gv;
+        const realSign=rm?(Number(realGl)>Number(realGv)?'1':Number(realGl)===Number(realGv)?'X':'2'):null;
+        rows+=`<tr>
+          <td style="font-size:10px;color:var(--t2);padding:5px 8px;background:var(--s2);white-space:nowrap">${m.local} vs ${m.visit}</td>
+          ${selectedPlayers.map(n=>{
+            if(!gruposClosed) return `<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">🔒</td>`;
+            const pm=(pronosticos[n]||{}).partidos?.[m.id];
+            if(!pm||pm.gl==null) return `<td style="color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">—</td>`;
+            const gl=pm.gl,gv=pm.gv;
+            const exacto=rm&&Number(gl)===Number(realGl)&&Number(gv)===Number(realGv);
+            const proSign=Number(gl)>Number(gv)?'1':Number(gl)===Number(gv)?'X':'2';
+            const quiniela=rm&&!exacto&&proSign===realSign;
+            const fallo=rm&&!exacto&&!quiniela;
+            const bg=exacto?'rgba(45,166,83,.25)':quiniela?'rgba(232,168,32,.2)':fallo?'rgba(232,50,50,.15)':'';
+            const color=exacto?'#4ade80':quiniela?'var(--gold)':fallo?'#f87171':'var(--t1)';
+            return `<td style="background:${bg};color:${color};text-align:center;font-size:11px;padding:5px 4px;font-weight:${exacto?'700':'400'}">${gl}-${gv}${exacto?' ✓':quiniela?' ~':fallo?' ✗':''}</td>`;
+          }).join('')}
+        </tr>`;
+      });
     });
+
+    // ── Tablas calculadas ────────────────────────────────────────────────
+    rows+=headerRow('📊 Tablas de grupo calculadas');
+    Object.keys(GRUPOS).forEach(g=>{
+      rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:10px;font-weight:700;padding:4px 8px">Grupo ${g}</td></tr>`;
+      const realTable=resultados['tabla_'+g];
+      [0,1,2,3].forEach(pos=>{
+        const posLabel=['1º','2º','3º','4º'][pos];
+        const realTeam=realTable?.[pos];
+        rows+=`<tr>
+          <td style="font-size:10px;color:var(--t2);padding:5px 8px;background:var(--s2)">${posLabel}${realTeam?` <span style="color:#4ade80;font-size:9px">(Real: ${realTeam})</span>`:''}</td>
+          ${selectedPlayers.map(n=>{
+            if(!gruposClosed) return `<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">🔒</td>`;
+            const myTable=computeGroupTable(n);
+            const team=myTable[g]?.[pos];
+            if(!team) return `<td style="color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">—</td>`;
+            const hit=realTeam&&cmp(team,realTeam);
+            const miss=realTeam&&!cmp(team,realTeam);
+            return `<td style="background:${hit?'rgba(45,166,83,.2)':miss?'rgba(232,50,50,.12)':''};color:${hit?'#4ade80':miss?'#f87171':'var(--t1)'};text-align:center;font-size:10px;padding:5px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">${team}${hit?' ✓':miss?' ✗':''}</td>`;
+          }).join('')}
+        </tr>`;
+      });
+    });
+
     rows+=headerRow('🎯 Mejores terceros');
     for(let i=1;i<=8;i++) rows+=dataRow(`Tercero ${i}`, `tercero_pool_${i}`, gruposClosed);
   }
