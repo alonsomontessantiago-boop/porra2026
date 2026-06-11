@@ -2928,59 +2928,95 @@ function renderComparador(){
   }
 
   if(phase==='all'||phase==='bracket'){
-    rows+=headerRow('🗂️ Bracket — picks KO');
     const isVisible=bracketClosed||isAdmin;
     if(!isVisible){
       rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="text-align:center;padding:16px;color:var(--t3);font-size:13px">🔒 El bracket se mostrará cuando el admin lo cierre</td></tr>`;
     } else {
-      // Visual bracket per player - show as mini bracket cards
+      // Single shared bracket, each match shows all players' picks
       rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="padding:8px 0">
-        <div style="overflow-x:auto">
-          <div style="display:flex;gap:4px;min-width:${selectedPlayers.length*200+100}px;padding:4px">
-            ${selectedPlayers.map(n=>{
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <div style="display:flex;gap:0;min-width:${Math.max(600, selectedPlayers.length*60+400)}px;align-items:flex-start;padding:4px">
+
+          ${(()=>{
+            // Build bracket rounds
+            const rounds = [
+              {label:'16AVOS', matches:BRACKET_R32, phase:'R32'},
+              {label:'OCTAVOS', matches:BRACKET_R16, phase:'R16'},
+              {label:'CUARTOS', matches:BRACKET_QF, phase:'QF'},
+              {label:'SEMIS', matches:BRACKET_SF, phase:'SF'},
+              {label:'FINAL', matches:BRACKET_FINAL, phase:'FINAL'},
+            ];
+
+            function getTeamsForPlayer(n, matchId, phase2){
               const pp=pronosticos[n]||{};
-              const pl=players[n]||{};
-              // Build mini bracket for this player
-              function getTeams(matchId, phase2){
-                const r32t=resolveR32Teams(n);
-                if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
-                const m2=ALL_BRACKET.find(x=>x.id===matchId);
-                if(!m2) return [null,null];
-                if(matchId==='M103'){
-                  function gl(sfId){const sf=ALL_BRACKET.find(x=>x.id===sfId);if(!sf)return null;const st1=pp.bracket?.[sf.m1],st2=pp.bracket?.[sf.m2],w=pp.bracket?.[sfId];if(!w)return null;return cmp(w,st1)?st2:st1;}
-                  return[gl('M101'),gl('M102')];
+              const r32t=resolveR32Teams(n);
+              if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
+              const m2=ALL_BRACKET.find(x=>x.id===matchId);
+              if(!m2) return [null,null];
+              if(matchId==='M103'){
+                function gl(sfId){
+                  const sf=ALL_BRACKET.find(x=>x.id===sfId);
+                  if(!sf) return null;
+                  const st1=pp.bracket?.[sf.m1],st2=pp.bracket?.[sf.m2],w=pp.bracket?.[sfId];
+                  if(!w) return null;
+                  return cmp(w,st1)?st2:st1;
                 }
-                return [pp.bracket?.[m2.m1]||null,pp.bracket?.[m2.m2]||null];
+                return [gl('M101'),gl('M102')];
               }
-              function mCard(matchId,phase2,label){
-                const [t1,t2]=getTeams(matchId,phase2);
-                const pick=pp.bracket?.[matchId];
-                const realW=partidos['KO_'+matchId]?.ganador;
+              return [pp.bracket?.[m2.m1]||null, pp.bracket?.[m2.m2]||null];
+            }
+
+            function matchCard(m, phase2){
+              const [baseT1, baseT2] = getTeamsForPlayer(selectedPlayers[0]||'', m.id, phase2);
+              const realW = partidos['KO_'+m.id]?.ganador;
+              // Collect all players' picks
+              const picks = selectedPlayers.map(n=>{
+                const pp=pronosticos[n]||{};
+                const pick=pp.bracket?.[m.id];
                 const hit=pick&&realW&&cmp(pick,realW);
-                return `<div style="background:var(--s2);border:1px solid ${hit?'#2da653':'var(--brd)'};border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:10px">
-                  <div style="color:var(--t3);font-size:9px;margin-bottom:2px">${label}</div>
-                  <div style="color:${pick&&cmp(pick,t1)?'var(--gold)':'var(--t2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t1||'?'}</div>
-                  <div style="color:var(--t3);font-size:9px">vs</div>
-                  <div style="color:${pick&&cmp(pick,t2)?'var(--gold)':'var(--t2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t2||'?'}</div>
-                  ${pick?`<div style="color:${hit?'#4ade80':'var(--gold)'};font-size:9px;margin-top:2px">→${pick}${hit?' ✓':''}</div>`:'<div style="color:var(--t3);font-size:9px">sin pick</div>'}
-                </div>`;
+                const miss=pick&&realW&&!cmp(pick,realW);
+                return {n, pick, hit, miss, av:players[n]?.avatar||'⚽'};
+              });
+              // Get teams from first player who has them
+              let t1=null,t2=null;
+              for(const n of selectedPlayers){
+                const [a,b]=getTeamsForPlayer(n,m.id,phase2);
+                if(a&&!t1) t1=a;
+                if(b&&!t2) t2=b;
+                if(t1&&t2) break;
               }
-              const r32html=BRACKET_R32.map(m=>mCard(m.id,'R32',m.desc)).join('');
-              const r16html=BRACKET_R16.map(m=>mCard(m.id,'R16',m.desc)).join('');
-              const qfhtml=BRACKET_QF.map(m=>mCard(m.id,'QF',m.desc)).join('');
-              const sfhtml=BRACKET_SF.map(m=>mCard(m.id,'SF',m.desc)).join('');
-              const finhtml=[...BRACKET_FINAL].map(m=>mCard(m.id,m.id==='M104'?'FINAL':'3RD',m.desc)).join('');
-              return `<div style="min-width:190px;max-width:190px">
-                <div style="text-align:center;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--gold)">${pl.avatar||'⚽'} ${n}</div>
-                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">16avos</div>${r32html}
-                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Octavos</div>${r16html}
-                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Cuartos</div>${qfhtml}
-                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Semis</div>${sfhtml}
-                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Final</div>${finhtml}
+              t1=t1||m.desc?.split(' vs ')[0]||'?';
+              t2=t2||m.desc?.split(' vs ')[1]||'?';
+
+              const picksHtml=picks.map(({n,pick,hit,miss,av})=>`
+                <div style="display:flex;align-items:center;gap:4px;padding:1px 0;font-size:10px">
+                  <span>${av}</span>
+                  <span style="color:${hit?'#4ade80':miss?'#f87171':pick?'var(--gold)':'var(--t3)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70px">
+                    ${pick?'→'+pick:'—'}${hit?' ✓':miss?' ✗':''}
+                  </span>
+                </div>`).join('');
+
+              return `<div style="background:var(--s2);border:1px solid ${realW?'rgba(45,166,83,.4)':'var(--brd)'};border-radius:8px;padding:6px 8px;margin-bottom:4px">
+                <div style="font-size:10px;color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t1}</div>
+                <div style="font-size:9px;color:var(--t3);padding:1px 0">vs</div>
+                <div style="font-size:10px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t2}</div>
+                ${realW?`<div style="font-size:9px;color:#4ade80;margin-top:2px;padding-top:2px;border-top:1px solid var(--brd)">Real: ${realW}</div>`:''}
+                <div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--brd2)">${picksHtml}</div>
               </div>`;
-            }).join('')}
-          </div>
+            }
+
+            return rounds.map(r=>`
+              <div style="flex:1;min-width:${r.phase==='R32'?130:r.phase==='FINAL'?120:110}px;padding:0 3px">
+                <div style="font-size:9px;font-weight:800;color:var(--gold);text-align:center;margin-bottom:6px;letter-spacing:.5px">${r.label}</div>
+                <div style="display:flex;flex-direction:column;justify-content:space-around;gap:4px;height:100%">
+                  ${r.matches.map(m=>matchCard(m, r.phase)).join('')}
+                </div>
+              </div>`).join('');
+          })()}
+
         </div>
+        </div>
+        <div style="font-size:10px;color:var(--t3);text-align:center;margin-top:6px">🟢 Acierto · 🔴 Fallo · 🟡 Pick sin resultado todavía</div>
       </td></tr>`;
     }
   }
