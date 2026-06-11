@@ -2929,22 +2929,60 @@ function renderComparador(){
 
   if(phase==='all'||phase==='bracket'){
     rows+=headerRow('🗂️ Bracket — picks KO');
-    const koMatches=[...BRACKET_R32,...BRACKET_R16,...BRACKET_QF,...BRACKET_SF,...BRACKET_FINAL];
-    koMatches.forEach(m=>{
-      const isVisible=bracketClosed||isAdmin;
-      const label=m.desc||m.id;
-      // For bracket, get each player's pick
-      const row=`<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2)">${label}</td>
-        ${selectedPlayers.map(n=>{
-          const pick=(pronosticos[n]||{}).bracket?.[m.id];
-          const realW=partidos['KO_'+m.id]?.ganador;
-          const isHit=pick&&realW&&cmp(pick,realW);
-          const isMiss=pick&&realW&&!cmp(pick,realW);
-          if(!isVisible) return '<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:6px 4px">🔒</td>';
-          return `<td style="background:${isHit?'rgba(45,166,83,.2)':isMiss?'rgba(232,50,50,.15)':'var(--s2)'};color:${isHit?'#4ade80':isMiss?'#f87171':'var(--t1)'};text-align:center;font-size:11px;padding:6px 4px">${pick||'—'}${isHit?' ✓':isMiss?' ✗':''}</td>`;
-        }).join('')}</tr>`;
-      rows+=row;
-    });
+    const isVisible=bracketClosed||isAdmin;
+    if(!isVisible){
+      rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="text-align:center;padding:16px;color:var(--t3);font-size:13px">🔒 El bracket se mostrará cuando el admin lo cierre</td></tr>`;
+    } else {
+      // Visual bracket per player - show as mini bracket cards
+      rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="padding:8px 0">
+        <div style="overflow-x:auto">
+          <div style="display:flex;gap:4px;min-width:${selectedPlayers.length*200+100}px;padding:4px">
+            ${selectedPlayers.map(n=>{
+              const pp=pronosticos[n]||{};
+              const pl=players[n]||{};
+              // Build mini bracket for this player
+              function getTeams(matchId, phase2){
+                const r32t=resolveR32Teams(n);
+                if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
+                const m2=ALL_BRACKET.find(x=>x.id===matchId);
+                if(!m2) return [null,null];
+                if(matchId==='M103'){
+                  function gl(sfId){const sf=ALL_BRACKET.find(x=>x.id===sfId);if(!sf)return null;const st1=pp.bracket?.[sf.m1],st2=pp.bracket?.[sf.m2],w=pp.bracket?.[sfId];if(!w)return null;return cmp(w,st1)?st2:st1;}
+                  return[gl('M101'),gl('M102')];
+                }
+                return [pp.bracket?.[m2.m1]||null,pp.bracket?.[m2.m2]||null];
+              }
+              function mCard(matchId,phase2,label){
+                const [t1,t2]=getTeams(matchId,phase2);
+                const pick=pp.bracket?.[matchId];
+                const realW=partidos['KO_'+matchId]?.ganador;
+                const hit=pick&&realW&&cmp(pick,realW);
+                return `<div style="background:var(--s2);border:1px solid ${hit?'#2da653':'var(--brd)'};border-radius:6px;padding:4px 6px;margin-bottom:3px;font-size:10px">
+                  <div style="color:var(--t3);font-size:9px;margin-bottom:2px">${label}</div>
+                  <div style="color:${pick&&cmp(pick,t1)?'var(--gold)':'var(--t2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t1||'?'}</div>
+                  <div style="color:var(--t3);font-size:9px">vs</div>
+                  <div style="color:${pick&&cmp(pick,t2)?'var(--gold)':'var(--t2)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t2||'?'}</div>
+                  ${pick?`<div style="color:${hit?'#4ade80':'var(--gold)'};font-size:9px;margin-top:2px">→${pick}${hit?' ✓':''}</div>`:'<div style="color:var(--t3);font-size:9px">sin pick</div>'}
+                </div>`;
+              }
+              const r32html=BRACKET_R32.map(m=>mCard(m.id,'R32',m.desc)).join('');
+              const r16html=BRACKET_R16.map(m=>mCard(m.id,'R16',m.desc)).join('');
+              const qfhtml=BRACKET_QF.map(m=>mCard(m.id,'QF',m.desc)).join('');
+              const sfhtml=BRACKET_SF.map(m=>mCard(m.id,'SF',m.desc)).join('');
+              const finhtml=[...BRACKET_FINAL].map(m=>mCard(m.id,m.id==='M104'?'FINAL':'3RD',m.desc)).join('');
+              return `<div style="min-width:190px;max-width:190px">
+                <div style="text-align:center;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--gold)">${pl.avatar||'⚽'} ${n}</div>
+                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">16avos</div>${r32html}
+                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Octavos</div>${r16html}
+                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Cuartos</div>${qfhtml}
+                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Semis</div>${sfhtml}
+                <div style="font-size:9px;font-weight:700;color:var(--t3);margin:4px 0 2px;text-transform:uppercase">Final</div>${finhtml}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </td></tr>`;
+    }
   }
 
   const tableHtml=`
