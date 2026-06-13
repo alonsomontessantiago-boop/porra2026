@@ -2023,14 +2023,25 @@ function renderRetos(){
   const el=document.getElementById('retos-content');
   const p=pronosticos[currentUser]||{};
   const res=resultados||{};
-  const activeRetos=retos.filter(r=>r.activo);
+  const activeRetos=retos.filter(r=>r.activo).sort((a,b)=>{
+    const aCerrado=a.cerrado||new Date()>new Date(a.deadline);
+    const bCerrado=b.cerrado||new Date()>new Date(b.deadline);
+    if(aCerrado&&!bCerrado) return 1;
+    if(!aCerrado&&bCerrado) return -1;
+    return 0;
+  });
 
   if(!activeRetos.length){
     el.innerHTML=`<div class="empty">No hay retos activos todavía.<br>El admin los lanzará durante el torneo 🎯</div>`;
     return;
   }
 
-  el.innerHTML=activeRetos.map(r=>{
+  // Share button at top
+  const shareBtn=isAdmin?`<div style="margin-bottom:12px">
+    <button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button>
+  </div>`:'';
+
+  el.innerHTML=shareBtn+activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
@@ -2128,6 +2139,131 @@ function renderRetos(){
     </div>`;
   }).join('');
 }
+
+window.mostrarSelectorCaptura=function(){
+  document.getElementById('modal-title').textContent='📸 Captura de retos';
+  const retosActivos=retos.filter(r=>r.activo);
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:13px;color:var(--t2);margin-bottom:12px">Selecciona los retos que quieres incluir en la captura:</p>
+    <div style="margin-bottom:14px">
+      ${retosActivos.map((r,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:8px;margin-bottom:6px;cursor:pointer">
+        <input type="checkbox" id="cap-reto-${i}" checked style="width:18px;height:18px;accent-color:var(--purple)">
+        <div>
+          <div style="font-size:13px;font-weight:700">${r.titulo}</div>
+          <div style="font-size:11px;color:${r.cerrado?'var(--t3)':'#4ade80'}">${r.cerrado?'🔒 Cerrado':'● Abierto'} · +${r.pts} pts</div>
+        </div>
+      </label>`).join('')}
+    </div>
+    <button class="btn btn-p btn-w" onclick="generarCapturaRetos()">📸 Generar imagen</button>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.generarCapturaRetos=function(){
+  const retosActivos=retos.filter(r=>r.activo);
+  const selected=retosActivos.filter((_,i)=>document.getElementById('cap-reto-'+i)?.checked);
+  if(!selected.length){ alert('Selecciona al menos un reto'); return; }
+
+  const canvas=document.createElement('canvas');
+  const W=540;
+  const ROW=90;
+  const PAD=20;
+  const HEADER=80;
+  canvas.width=W;
+  canvas.height=HEADER+selected.length*ROW+PAD*2;
+  const ctx=canvas.getContext('2d');
+
+  // Background
+  const grad=ctx.createLinearGradient(0,0,W,canvas.height);
+  grad.addColorStop(0,'#1c0030');
+  grad.addColorStop(1,'#3d0015');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,canvas.height);
+
+  // Header
+  ctx.fillStyle='#e8a820';
+  ctx.font='bold 20px system-ui';
+  ctx.textAlign='center';
+  ctx.fillText('🎯 Mini-retos — Porra Mundial 2026',W/2,36);
+  ctx.fillStyle='rgba(255,255,255,.4)';
+  ctx.font='12px system-ui';
+  ctx.fillText(new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Madrid'}),W/2,56);
+
+  // Divider
+  ctx.fillStyle='rgba(232,168,32,.3)';
+  ctx.fillRect(PAD,68,W-PAD*2,1);
+
+  // Reto cards
+  selected.forEach((r,i)=>{
+    const y=HEADER+i*ROW+PAD;
+    const cerrado=r.cerrado||new Date()>new Date(r.deadline);
+
+    // Card bg
+    ctx.fillStyle=cerrado?'rgba(255,255,255,.04)':'rgba(139,47,201,.12)';
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(PAD,y,W-PAD*2,ROW-8,8);
+    else ctx.rect(PAD,y,W-PAD*2,ROW-8);
+    ctx.fill();
+
+    // Left accent bar
+    ctx.fillStyle=cerrado?'rgba(255,255,255,.2)':'#8b2fc9';
+    ctx.fillRect(PAD,y,3,ROW-8);
+
+    // Status dot
+    ctx.fillStyle=cerrado?'#666':'#4ade80';
+    ctx.beginPath();
+    ctx.arc(PAD+16,y+16,5,0,Math.PI*2);
+    ctx.fill();
+
+    // Title
+    ctx.fillStyle='#f0e6ff';
+    ctx.font='bold 14px system-ui';
+    ctx.textAlign='left';
+    // Truncate title
+    let title=r.titulo;
+    if(ctx.measureText(title).width>340) title=title.substring(0,40)+'...';
+    ctx.fillText(title,PAD+28,y+20);
+
+    // Description
+    if(r.desc){
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      ctx.font='11px system-ui';
+      let desc=r.desc;
+      if(ctx.measureText(desc).width>360) desc=desc.substring(0,50)+'...';
+      ctx.fillText(desc,PAD+28,y+36);
+    }
+
+    // Deadline
+    if(r.deadline){
+      ctx.fillStyle='rgba(255,255,255,.35)';
+      ctx.font='10px system-ui';
+      ctx.fillText('⏰ Plazo: '+fmtDate(r.deadline),PAD+28,y+52);
+    }
+
+    // Points badge
+    ctx.fillStyle='#e8a820';
+    ctx.font='bold 16px system-ui';
+    ctx.textAlign='right';
+    ctx.fillText('+'+r.pts+' pts',W-PAD-10,y+22);
+
+    // Status text
+    ctx.fillStyle=cerrado?'#888':'#4ade80';
+    ctx.font='bold 10px system-ui';
+    ctx.fillText(cerrado?'CERRADO':'ABIERTO',W-PAD-10,y+38);
+  });
+
+  // Footer
+  ctx.fillStyle='rgba(255,255,255,.2)';
+  ctx.font='10px system-ui';
+  ctx.textAlign='center';
+  ctx.fillText('Responde en: alonsomontessantiago-boop.github.io/porra2026',W/2,canvas.height-8);
+
+  const imgData=canvas.toDataURL('image/png');
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Mantén pulsada para guardar o compartir por WhatsApp 📲</p>
+    <img src="${imgData}" style="width:100%;border-radius:8px;display:block;margin-bottom:10px">
+    <button class="btn btn-p btn-w" onclick="descargarCaptura('${imgData}')">💾 Descargar PNG</button>
+    <button class="btn btn-s btn-sm" style="width:100%;margin-top:6px" onclick="mostrarSelectorCaptura()">← Volver a seleccionar</button>`;
+};
 
 window.guardarRetoDirecto=async function(retoId, valor){
   const p2={...pronosticos[currentUser]||{}};
