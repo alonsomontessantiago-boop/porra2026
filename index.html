@@ -2039,10 +2039,8 @@ function renderRetos(){
     return;
   }
 
-  // Share button at top
-  const shareBtn=`<div style="margin-bottom:12px">
-    <button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button>
-  </div>`;
+  // Share button - use regular string to avoid nested backtick issues
+  const shareBtn='<div style="margin-bottom:12px"><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button></div>';
 
   el.innerHTML=activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
