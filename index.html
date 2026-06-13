@@ -2046,6 +2046,7 @@ function renderRetos(){
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
+    const perdido=cerrado&&!haGanado&&myRespuesta;
     const totalResp=Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length;
     const total=Object.keys(players).length;
 
@@ -2127,7 +2128,6 @@ function renderRetos(){
       }
     }
 
-    const perdido=cerrado&&!haGanado&&myRespuesta;
     const borderColor=haGanado?'var(--goldd)':perdido?'rgba(232,50,50,.4)':cerrado?'var(--brd2)':'var(--purple)';
     const bgColor=haGanado?'rgba(232,168,32,.05)':perdido?'rgba(232,50,50,.05)':'var(--s1)';
     return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s">
