@@ -2046,7 +2046,9 @@ function renderRetos(){
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
-    const perdido=cerrado&&!haGanado&&myRespuesta;
+    // A reto is "resolved" when admin has marked at least one winner
+    const resuelto=cerrado&&r.ganadores&&Object.values(r.ganadores).some(v=>v);
+    const perdido=resuelto&&!haGanado&&myRespuesta;
     const totalResp=Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length;
     const total=Object.keys(players).length;
 
