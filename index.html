@@ -2022,42 +2022,122 @@ function renderPartidos(){
 function renderRetos(){
   const el=document.getElementById('retos-content');
   const p=pronosticos[currentUser]||{};
+  const res=resultados||{};
   const activeRetos=retos.filter(r=>r.activo);
-  
+
   if(!activeRetos.length){
-    el.innerHTML='<div class="empty">No hay retos activos todavía. El admin los lanzará durante el torneo.</div>';
+    el.innerHTML=`<div class="empty">No hay retos activos todavía.<br>El admin los lanzará durante el torneo 🎯</div>`;
     return;
   }
 
   el.innerHTML=activeRetos.map(r=>{
-    const myRespuesta=p.retos?.[r.id];
+    const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
-    return `<div class="reto-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <h4>${r.titulo}</h4>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span class="badge badge-gold">+${r.pts} pts</span>
-          ${haGanado?'<span class="badge badge-ok">✓ Ganado</span>':''}
-          ${cerrado?'<span class="badge badge-lock">Cerrado</span>':'<span class="badge badge-open">Abierto</span>'}
+    const totalResp=Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length;
+    const total=Object.keys(players).length;
+
+    // Status badge
+    const statusBadge=haGanado
+      ?`<span class="badge" style="background:rgba(232,168,32,.2);color:var(--gold);border:1px solid var(--goldd);font-size:11px">🏆 Ganado</span>`
+      :cerrado
+        ?`<span class="badge badge-lock" style="font-size:11px">🔒 Cerrado</span>`
+        :`<span class="badge badge-open" style="font-size:11px;animation:pulse .8s infinite">● Abierto</span>`;
+
+    // Deadline countdown
+    let deadlineHtml='';
+    if(r.deadline&&!cerrado){
+      const diff=new Date(r.deadline)-new Date();
+      if(diff>0){
+        const h=Math.floor(diff/3600000);
+        const m=Math.floor((diff%3600000)/60000);
+        const urgente=diff<3600000;
+        deadlineHtml=`<div style="font-size:11px;color:${urgente?'var(--red)':'var(--t3)'};margin-top:4px">
+          ⏰ Cierra en ${h>0?h+'h ':''} ${m}min
+        </div>`;
+      }
+    } else if(r.deadline&&cerrado){
+      deadlineHtml=`<div style="font-size:11px;color:var(--t3);margin-top:4px">⏰ Cerrado el ${fmtDate(r.deadline)}</div>`;
+    }
+
+    // My answer display
+    let myAnswerHtml='';
+    if(myRespuesta){
+      myAnswerHtml=`<div style="background:${haGanado?'rgba(232,168,32,.1)':'rgba(255,255,255,.04)'};border:1px solid ${haGanado?'var(--goldd)':'var(--brd)'};border-radius:8px;padding:10px 12px;margin-top:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">${haGanado?'🏆':'📝'}</span>
+        <div>
+          <div style="font-size:10px;color:var(--t3);margin-bottom:2px">Tu respuesta</div>
+          <div style="font-size:14px;font-weight:700;color:${haGanado?'var(--gold)':'var(--t1)'}">${myRespuesta}</div>
+        </div>
+        ${haGanado?`<span style="margin-left:auto;font-size:20px;font-weight:800;color:var(--gold)">+${r.pts} pts</span>`:''}
+      </div>`;
+    }
+
+    // Input field based on tipo
+    let inputHtml='';
+    if(!cerrado){
+      const tipo=r.tipo||'texto';
+      let fieldHtml='';
+      if(tipo==='equipos'){
+        fieldHtml=`<select class="fi" id="reto-${r.id}" style="font-size:14px;padding:10px 12px">
+          <option value="">Selecciona un equipo...</option>
+          ${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(myRespuesta,t)?'selected':''}>${t}</option>`).join('')}
+        </select>`;
+      } else if(tipo==='sino'){
+        fieldHtml=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <button class="btn ${cmp(myRespuesta,'Sí')?'btn-g':'btn-s'}" style="padding:14px;font-size:15px;font-weight:700" onclick="guardarRetoDirecto('${r.id}','Sí')">✅ Sí</button>
+          <button class="btn ${cmp(myRespuesta,'No')?'btn-danger':'btn-s'}" style="padding:14px;font-size:15px;font-weight:700" onclick="guardarRetoDirecto('${r.id}','No')">❌ No</button>
+        </div>`;
+      } else if(tipo==='jugadores'||tipo==='multiple'){
+        fieldHtml=`<select class="fi" id="reto-${r.id}" style="font-size:14px;padding:10px 12px">
+          <option value="">Selecciona...</option>
+          ${(r.opciones||[]).map(o=>`<option value="${o}" ${cmp(myRespuesta,o)?'selected':''}>${o}</option>`).join('')}
+        </select>`;
+      } else if(tipo==='numero'||tipo==='rango'){
+        fieldHtml=`<input class="fi" type="number" id="reto-${r.id}" value="${myRespuesta||''}" placeholder="${tipo==='rango'?'Escribe un número...':'Número...'}" style="font-size:18px;font-weight:700;text-align:center;padding:12px">`;
+      } else {
+        fieldHtml=`<input class="fi" type="text" id="reto-${r.id}" value="${myRespuesta||''}" placeholder="Escribe tu respuesta..." style="font-size:14px;padding:10px 12px">`;
+      }
+
+      if(tipo!=='sino'){
+        inputHtml=`<div style="margin-top:12px">
+          ${fieldHtml}
+          <button class="btn btn-p" style="width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px" onclick="guardarReto('${r.id}')">
+            ${myRespuesta?'✏️ Cambiar respuesta':'💬 Enviar respuesta'}
+          </button>
+        </div>`;
+      } else {
+        inputHtml=`<div style="margin-top:12px">${fieldHtml}</div>`;
+      }
+    }
+
+    return `<div style="background:var(--s1);border:1px solid ${haGanado?'var(--goldd)':cerrado?'var(--brd2)':'var(--brd)'};border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-size:16px;font-weight:800;color:var(--t1);margin-bottom:4px">${r.titulo}</div>
+          ${r.desc?`<div style="font-size:12px;color:var(--t2);line-height:1.5">${r.desc}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <span class="badge badge-gold" style="font-size:13px;font-weight:800">+${r.pts} pts</span>
+          ${statusBadge}
         </div>
       </div>
-      <p>${r.desc}</p>
-      ${r.deadline?`<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Plazo: ${fmtDate(r.deadline)}</div>`:''}
-      ${!cerrado?`<div class="field">
-        ${(()=>{
-          const tipo=r.tipo||'texto';
-          if(tipo==='equipos') return `<select class="fi" id="reto-${r.id}"><option value="">Selecciona equipo...</option>${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(myRespuesta,t)?'selected':''}>${t}</option>`).join('')}</select>`;
-          if(tipo==='sino') return `<div style="display:flex;gap:8px"><button class="btn ${cmp(myRespuesta,'Sí')?'btn-g':'btn-s'} btn-sm" onclick="document.getElementById('reto-hidden-${r.id}').value='Sí';guardarReto('${r.id}')">Sí</button><button class="btn ${cmp(myRespuesta,'No')?'btn-danger':'btn-s'} btn-sm" onclick="document.getElementById('reto-hidden-${r.id}').value='No';guardarReto('${r.id}')">No</button><input type="hidden" id="reto-hidden-${r.id}" value="${esc(myRespuesta||'')}"></div>`;
-          if(tipo==='jugadores'||tipo==='multiple') return `<select class="fi" id="reto-${r.id}"><option value="">Selecciona...</option>${(r.opciones||[]).map(o=>`<option value="${esc(o)}" ${cmp(myRespuesta,o)?'selected':''}>${o}</option>`).join('')}</select>`;
-          if(tipo==='numero'||tipo==='rango') return `<input class="fi" type="number" id="reto-${r.id}" value="${esc(myRespuesta||'')}" placeholder="${tipo==='rango'?'Número entre 1-90':'Número...'}">`;
-          return `<input class="fi" type="text" id="reto-${r.id}" value="${esc(myRespuesta||'')}" placeholder="Tu respuesta...">`;
-        })()}
-        ${r.tipo!=='sino'?`<button class="btn btn-p btn-sm" style="margin-top:6px" onclick="guardarReto('${r.id}')">Guardar respuesta</button>`:''}
-        ${r.tipo==='sino'&&myRespuesta?`<div style="font-size:12px;color:#4ade80;margin-top:4px">✅ Tu respuesta: ${myRespuesta}</div>`:''}
-      </div>`:myRespuesta?`<div class="note">Tu respuesta: <strong>${myRespuesta}</strong></div>`:''}`; 
+      ${deadlineHtml}
+      ${myAnswerHtml}
+      ${inputHtml}
+    </div>`;
   }).join('');
 }
+
+window.guardarRetoDirecto=async function(retoId, valor){
+  const p2={...pronosticos[currentUser]||{}};
+  if(!p2.retos) p2.retos={};
+  p2.retos[retoId]=valor;
+  await savePronostico(currentUser,p2);
+  renderRetos();
+  showToast('✅ Respuesta guardada: '+valor);
+};
+
 
 window.guardarReto=async function(retoId){
   const el=document.getElementById('reto-'+retoId);
