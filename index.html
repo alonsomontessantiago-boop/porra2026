@@ -912,10 +912,13 @@ async function loadPlayers(){
   const snap=await getDocs(collection(db,"players"));
   players={};
   snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
+  // Load all pronos so login shows real points
+  await loadAllPronos();
   renderLogin();
-  onSnapshot(collection(db,"players"),snap=>{
+  onSnapshot(collection(db,"players"),async snap=>{
     players={};
     snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
+    await loadAllPronos();
     renderLogin();
     if(isActive('ranking')) renderRanking();
   });
@@ -997,9 +1000,12 @@ window.startLogin=async function(name){
 window.loginConPw=function(){
   const pw=document.getElementById('pw-input').value;
   if(simpleHash(pw)===players[pendingLogin].pwHash){
-    document.getElementById('pw-modal').style.display='none';
+    document.getElementById('pw-inline').style.display='none';
     doLogin(pendingLogin);
-  } else { document.getElementById('pw-error').style.display='block'; }
+  } else {
+    document.getElementById('pw-error').style.display='block';
+    document.getElementById('pw-input').select();
+  }
 };
 window.cancelPw=function(){
   document.getElementById('pw-inline').style.display='none';
