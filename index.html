@@ -160,9 +160,21 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .ko-block input[type=text]:focus{border-color:var(--purple)}
 
 /* LOGIN */
-.login-box{background:var(--s1);border:1px solid var(--brd);border-radius:var(--r2);padding:24px;max-width:400px;margin:28px auto}
+.login-box{background:var(--s1);border:1px solid var(--brd);border-radius:var(--r2);padding:24px;max-width:440px;margin:28px auto}
 .login-box h2{font-size:20px;font-weight:800;margin-bottom:4px}
 .login-box p{font-size:13px;color:var(--t2);margin-bottom:18px}
+.login-circles{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-bottom:14px;padding:4px}
+.login-circle{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:transform .15s}
+.login-circle:hover{transform:scale(1.08)}
+.login-circle:active{transform:scale(.95)}
+.login-circle-av{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;border:3px solid var(--brd);background:var(--s2);position:relative;transition:border-color .15s}
+.login-circle-av.av-gold{border-color:#ffd700;box-shadow:0 0 12px rgba(255,215,0,.35)}
+.login-circle-av.av-silver{border-color:#c0c0c0;box-shadow:0 0 8px rgba(192,192,192,.2)}
+.login-circle-av.av-bronze{border-color:#cd7f32;box-shadow:0 0 8px rgba(205,127,50,.2)}
+.login-circle-av.av-selected{border-color:var(--purple);box-shadow:0 0 12px rgba(139,47,201,.4)}
+.login-circle-crown{position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:16px;line-height:1}
+.login-circle-name{font-size:11px;font-weight:700;color:var(--t1);text-align:center;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.login-circle-pts{font-size:10px;color:var(--gold);font-weight:700}
 .login-list{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;max-height:260px;overflow-y:auto}
 .login-btn{padding:11px 14px;background:var(--s2);border:1px solid var(--brd);border-radius:8px;color:var(--t1);font-size:14px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;transition:all .15s;gap:10px}
 .login-btn:hover{border-color:var(--purple);background:var(--s3)}
@@ -249,6 +261,26 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .compare-fill{height:100%;position:absolute;left:0;top:0;border-radius:10px;transition:width .5s}
 .compare-val{width:35px;text-align:left;font-weight:700;font-size:11px;color:var(--gold)}
 
+/* PAGE TRANSITION */
+.page{opacity:0;transition:opacity .18s ease}
+.page.on{opacity:1}
+
+/* ADMIN COLLAPSIBLE */
+.admin-sec-hdr{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:12px 14px;background:var(--s1);border:1px solid var(--brd);border-radius:var(--r2);margin-bottom:4px;user-select:none}
+.admin-sec-hdr:hover{background:var(--s2)}
+.admin-sec-hdr h3{font-size:13px;font-weight:800;color:var(--gold);margin:0}
+.admin-sec-body{display:none;background:var(--s1);border:1px solid var(--brd);border-top:none;border-radius:0 0 var(--r2) var(--r2);padding:14px;margin-bottom:8px}
+.admin-sec-body.open{display:block}
+.admin-sec-arrow{font-size:12px;color:var(--t3);transition:transform .2s}
+.admin-sec-arrow.open{transform:rotate(180deg)}
+
+/* PARTIDO DEL DIA */
+.match-live{border:1px solid var(--red)!important;animation:pulse-border 2s infinite}
+@keyframes pulse-border{0%,100%{border-color:var(--red)}50%{border-color:transparent}}
+
+/* RETO CERRADO */
+.reto-cerrado{opacity:.7;pointer-events:none}
+
 </style>
 </head>
 <body>
@@ -280,13 +312,13 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 <!-- TABS -->
 <div id="tabs" class="tabs" style="display:none">
   <button class="tab on" data-tab="ranking" onclick="go('ranking')">🏅 Ranking</button>
-  <button class="tab" data-tab="pronosticos" onclick="go('pronosticos')">📋 Pronós.</button>
-  <button class="tab" data-tab="bracket" onclick="go('bracket')">🗂️ Bracket</button>
+  <button class="tab" data-tab="pronosticos" onclick="go('pronosticos')">📋 Pronós.<span id="badge-pronos" class="tab-badge" style="display:none"></span></button>
+  <button class="tab" data-tab="bracket" onclick="go('bracket')">🗂️ Bracket<span id="badge-bracket" class="tab-badge" style="display:none"></span></button>
   <button class="tab" data-tab="partidos" onclick="go('partidos')">⚽ Partidos</button>
-  <button class="tab" data-tab="retos" onclick="go('retos')">🎯 Retos</button>
+  <button class="tab" data-tab="retos" onclick="go('retos')">🎯 Retos<span id="badge-retos" class="tab-badge" style="display:none"></span></button>
   <button class="tab" data-tab="stats" onclick="go('stats')">📊 Stats</button>
-  <button class="tab" data-tab="avisos" onclick="go('avisos')">📢 Avisos</button>
-  <button class="tab" data-tab="comparador" onclick="go('comparador')">👥 Pronós.</button>
+  <button class="tab" data-tab="avisos" onclick="go('avisos')">📢 Avisos<span id="badge-avisos" class="tab-badge" style="display:none"></span></button>
+  <button class="tab" data-tab="comparador" onclick="go('comparador')">👥 Comparar</button>
   <button class="tab" data-tab="normas" onclick="go('normas')">📖 Normas</button>
   <button class="tab" data-tab="perfil" onclick="go('perfil')">👤 Perfil</button>
   <button id="admin-tab" class="tab" data-tab="admin" style="display:none" onclick="go('admin')">⚙️ Admin</button>
@@ -296,13 +328,26 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 <div id="login-page" class="page on">
   <div class="login-box">
     <h2>Porra Mundial 2026 🏆</h2>
-    <p>Selecciona tu nombre o regístrate</p>
-    <div id="player-list" class="login-list"><div class="spinner">Cargando...</div></div>
-    <div class="divider">primera vez</div>
+    <p>Toca tu nombre para entrar</p>
+    <div id="player-list"><div class="spinner">Cargando...</div></div>
+    <!-- Inline PW field -->
+    <div id="pw-inline" style="display:none;background:var(--s2);border-radius:10px;padding:14px;margin-top:10px">
+      <div id="pw-inline-name" style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px;text-align:center"></div>
+      <input type="password" id="pw-input" class="fi" placeholder="Tu contraseña..." style="margin-bottom:8px" onkeydown="if(event.key==='Enter')loginConPw()">
+      <div id="pw-error" style="font-size:12px;color:#f87171;margin-bottom:8px;display:none">Contraseña incorrecta</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p" style="flex:1" onclick="loginConPw()">Entrar</button>
+        <button class="btn btn-s" onclick="cancelPw()">Cancelar</button>
+      </div>
+    </div>
+    <div class="divider" style="margin-top:14px">primera vez</div>
     <div id="register-form">
       <div class="field"><label>Tu nombre</label><input type="text" class="fi" id="new-name" placeholder="Cómo quieres aparecer..." maxlength="20"></div>
       <div class="field"><label>Elige tu avatar</label>
-        <div class="avatar-picker" id="reg-avatar-picker"></div>
+        <button class="btn btn-s btn-sm" onclick="toggleAvatarPicker()" id="avatar-picker-btn" style="width:100%;text-align:left">
+          <span id="avatar-preview">⚽</span> Cambiar avatar ▼
+        </button>
+        <div id="reg-avatar-picker" style="display:none;margin-top:8px"></div>
       </div>
       <div class="field"><label>Contraseña</label><input type="password" class="fi" id="new-pw" placeholder="Mínimo 4 caracteres..." maxlength="40"></div>
       <div class="field"><label>Repetir contraseña</label><input type="password" class="fi" id="new-pw2" placeholder="Repite la contraseña..."></div>
@@ -315,24 +360,12 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
       <button class="btn btn-s btn-xs" onclick="checkAdmin()">OK</button>
     </div>
   </div>
-  <!-- PW Modal -->
-  <div id="pw-modal" style="display:none">
-    <div class="login-box" style="margin-top:0">
-      <h2 id="pw-modal-name">Entrar...</h2>
-      <p>Introduce tu contraseña</p>
-      <input type="password" id="pw-input" class="fi" placeholder="Tu contraseña..." style="margin-bottom:10px" onkeydown="if(event.key==='Enter')loginConPw()">
-      <div id="pw-error" style="font-size:12px;color:#f87171;margin-bottom:8px;display:none">Contraseña incorrecta</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-p" style="flex:1" onclick="loginConPw()">Entrar</button>
-        <button class="btn btn-s" onclick="cancelPw()">Cancelar</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- RANKING -->
 <div id="ranking-page" class="page">
   <div id="countdown-area"></div>
+  <div id="partido-del-dia"></div>
   <div id="ranking-banners"></div>
   <div id="bote-bar"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -486,20 +519,130 @@ const db = getFirestore(app);
 // ═══════════════════════════════════════════════════════════
 const GRUPOS = {
   A: ["México","Sudáfrica","Corea del Sur","Rep. Checa"],
-  B: ["Canadá","Bosnia y Herz.","Qatar","Suiza"],
+  B: ["Canadá","Bosnia Herzegovina","Qatar","Suiza"],
   C: ["Brasil","Marruecos","Haití","Escocia"],
   D: ["EEUU","Paraguay","Australia","Turquía"],
-  E: ["Alemania","Curazao","Costa de Marfil","Ecuador"],
+  E: ["Alemania","Curaçao","Costa de Marfil","Ecuador"],
   F: ["Holanda","Japón","Suecia","Túnez"],
   G: ["Bélgica","Egipto","Irán","Nueva Zelanda"],
   H: ["España","Cabo Verde","Arabia Saudí","Uruguay"],
   I: ["Francia","Senegal","Irak","Noruega"],
   J: ["Argentina","Argelia","Austria","Jordania"],
-  K: ["Portugal","R.D. Congo","Uzbekistán","Colombia"],
+  K: ["Portugal","R.D. del Congo","Uzbekistán","Colombia"],
   L: ["Inglaterra","Croacia","Ghana","Panamá"]
 };
 
+// Alias de equipos - normaliza variantes de nombres
+const TEAM_ALIASES = {
+  'holanda': 'Holanda', 'países bajos': 'Holanda', 'paises bajos': 'Holanda',
+  'curazao': 'Curaçao', 'curacao': 'Curaçao', 'curaçao': 'Curaçao',
+  'bosnia': 'Bosnia Herzegovina', 'bosnia y herz.': 'Bosnia Herzegovina',
+  'bosnia y herzegovina': 'Bosnia Herzegovina', 'bosnia herz': 'Bosnia Herzegovina',
+  'r.d. congo': 'R.D. del Congo', 'rd congo': 'R.D. del Congo', 'congo': 'R.D. del Congo',
+  'república democrática del congo': 'R.D. del Congo',
+  'rep. checa': 'Rep. Checa', 'república checa': 'Rep. Checa', 'chequia': 'Rep. Checa',
+  'eeuu': 'EEUU', 'estados unidos': 'EEUU', 'usa': 'EEUU',
+  'corea': 'Corea del Sur', 'korea': 'Corea del Sur',
+  'irlanda del norte': 'Irlanda del Norte',
+  'arabia saudi': 'Arabia Saudí', 'arabia saudita': 'Arabia Saudí',
+  'cabo verde': 'Cabo Verde',
+};
+
+function normalizeTeam(name) {
+  if(!name) return name;
+  const lower = name.trim().toLowerCase();
+  return TEAM_ALIASES[lower] || name.trim();
+}
+
 const ALL_TEAMS = Object.values(GRUPOS).flat();
+
+// Fixture oficial con fechas (hora Madrid)
+const FIXTURE_DATES = {
+  // Grupo A
+  'G_A_0_1': {date:'2026-06-11T21:00', local:'México', visit:'Sudáfrica'},
+  'G_A_0_2': {date:'2026-06-19T03:00', local:'México', visit:'Corea del Sur'},
+  'G_A_0_3': {date:'2026-06-25T03:00', local:'Rep. Checa', visit:'México'},
+  'G_A_1_2': {date:'2026-06-18T18:00', local:'Sudáfrica', visit:'Corea del Sur'},
+  'G_A_1_3': {date:'2026-06-25T03:00', local:'Sudáfrica', visit:'Rep. Checa'},
+  'G_A_2_3': {date:'2026-06-12T04:00', local:'Corea del Sur', visit:'Rep. Checa'},
+  // Grupo B
+  'G_B_0_1': {date:'2026-06-12T21:00', local:'Canadá', visit:'Bosnia Herzegovina'},
+  'G_B_0_2': {date:'2026-06-19T00:00', local:'Canadá', visit:'Qatar'},
+  'G_B_0_3': {date:'2026-06-24T21:00', local:'Suiza', visit:'Canadá'},
+  'G_B_1_2': {date:'2026-06-24T21:00', local:'Bosnia Herzegovina', visit:'Qatar'},
+  'G_B_1_3': {date:'2026-06-18T21:00', local:'Suiza', visit:'Bosnia Herzegovina'},
+  'G_B_2_3': {date:'2026-06-13T21:00', local:'Qatar', visit:'Suiza'},
+  // Grupo C
+  'G_C_0_1': {date:'2026-06-14T00:00', local:'Brasil', visit:'Marruecos'},
+  'G_C_0_2': {date:'2026-06-20T02:30', local:'Brasil', visit:'Haití'},
+  'G_C_0_3': {date:'2026-06-25T00:00', local:'Escocia', visit:'Brasil'},
+  'G_C_1_2': {date:'2026-06-25T00:00', local:'Marruecos', visit:'Haití'},
+  'G_C_1_3': {date:'2026-06-20T00:00', local:'Escocia', visit:'Marruecos'},
+  'G_C_2_3': {date:'2026-06-14T03:00', local:'Haití', visit:'Escocia'},
+  // Grupo D
+  'G_D_0_1': {date:'2026-06-13T03:00', local:'EEUU', visit:'Paraguay'},
+  'G_D_0_2': {date:'2026-06-19T21:00', local:'EEUU', visit:'Australia'},
+  'G_D_0_3': {date:'2026-06-26T04:00', local:'Turquía', visit:'EEUU'},
+  'G_D_1_2': {date:'2026-06-20T05:00', local:'Turquía', visit:'Paraguay'},
+  'G_D_1_3': {date:'2026-06-26T04:00', local:'Paraguay', visit:'Australia'},
+  'G_D_2_3': {date:'2026-06-14T06:00', local:'Australia', visit:'Turquía'},
+  // Grupo E
+  'G_E_0_1': {date:'2026-06-14T19:00', local:'Alemania', visit:'Curaçao'},
+  'G_E_0_2': {date:'2026-06-20T22:00', local:'Alemania', visit:'Costa de Marfil'},
+  'G_E_0_3': {date:'2026-06-25T22:00', local:'Ecuador', visit:'Alemania'},
+  'G_E_1_2': {date:'2026-06-15T01:00', local:'Costa de Marfil', visit:'Ecuador'},
+  'G_E_1_3': {date:'2026-06-25T22:00', local:'Curaçao', visit:'Costa de Marfil'},
+  'G_E_2_3': {date:'2026-06-21T02:00', local:'Ecuador', visit:'Curaçao'},
+  // Grupo F
+  'G_F_0_1': {date:'2026-06-14T22:00', local:'Holanda', visit:'Japón'},
+  'G_F_0_2': {date:'2026-06-20T19:00', local:'Holanda', visit:'Suecia'},
+  'G_F_0_3': {date:'2026-06-26T01:00', local:'Túnez', visit:'Holanda'},
+  'G_F_1_2': {date:'2026-06-26T01:00', local:'Japón', visit:'Suecia'},
+  'G_F_1_3': {date:'2026-06-15T04:00', local:'Suecia', visit:'Túnez'},
+  'G_F_2_3': {date:'2026-06-21T06:00', local:'Túnez', visit:'Japón'},
+  // Grupo G
+  'G_G_0_1': {date:'2026-06-15T21:00', local:'Bélgica', visit:'Egipto'},
+  'G_G_0_2': {date:'2026-06-21T21:00', local:'Bélgica', visit:'Irán'},
+  'G_G_0_3': {date:'2026-06-27T05:00', local:'Nueva Zelanda', visit:'Bélgica'},
+  'G_G_1_2': {date:'2026-06-22T03:00', local:'Nueva Zelanda', visit:'Egipto'},
+  'G_G_1_3': {date:'2026-06-27T05:00', local:'Egipto', visit:'Irán'},
+  'G_G_2_3': {date:'2026-06-16T03:00', local:'Irán', visit:'Nueva Zelanda'},
+  // Grupo H
+  'G_H_0_1': {date:'2026-06-15T18:00', local:'España', visit:'Cabo Verde'},
+  'G_H_0_2': {date:'2026-06-21T18:00', local:'España', visit:'Arabia Saudí'},
+  'G_H_0_3': {date:'2026-06-27T02:00', local:'Uruguay', visit:'España'},
+  'G_H_1_2': {date:'2026-06-16T00:00', local:'Arabia Saudí', visit:'Uruguay'},
+  'G_H_1_3': {date:'2026-06-27T02:00', local:'Cabo Verde', visit:'Arabia Saudí'},
+  'G_H_2_3': {date:'2026-06-22T00:00', local:'Uruguay', visit:'Cabo Verde'},
+  // Grupo I
+  'G_I_0_1': {date:'2026-06-16T21:00', local:'Francia', visit:'Senegal'},
+  'G_I_0_2': {date:'2026-06-22T23:00', local:'Francia', visit:'Irak'},
+  'G_I_0_3': {date:'2026-06-26T21:00', local:'Noruega', visit:'Francia'},
+  'G_I_1_2': {date:'2026-06-22T02:00', local:'Noruega', visit:'Senegal'},
+  'G_I_1_3': {date:'2026-06-26T21:00', local:'Senegal', visit:'Irak'},
+  'G_I_2_3': {date:'2026-06-17T00:00', local:'Irak', visit:'Noruega'},
+  // Grupo J
+  'G_J_0_1': {date:'2026-06-17T03:00', local:'Argentina', visit:'Argelia'},
+  'G_J_0_2': {date:'2026-06-22T19:00', local:'Argentina', visit:'Austria'},
+  'G_J_0_3': {date:'2026-06-28T04:00', local:'Jordania', visit:'Argentina'},
+  'G_J_1_2': {date:'2026-06-17T06:00', local:'Austria', visit:'Jordania'},
+  'G_J_1_3': {date:'2026-06-28T04:00', local:'Argelia', visit:'Austria'},
+  'G_J_2_3': {date:'2026-06-23T05:00', local:'Jordania', visit:'Argelia'},
+  // Grupo K
+  'G_K_0_1': {date:'2026-06-17T19:00', local:'Portugal', visit:'R.D. del Congo'},
+  'G_K_0_2': {date:'2026-06-23T19:00', local:'Portugal', visit:'Uzbekistán'},
+  'G_K_0_3': {date:'2026-06-28T01:30', local:'Colombia', visit:'Portugal'},
+  'G_K_1_2': {date:'2026-06-24T04:00', local:'Colombia', visit:'R.D. del Congo'},
+  'G_K_1_3': {date:'2026-06-28T01:30', local:'R.D. del Congo', visit:'Uzbekistán'},
+  'G_K_2_3': {date:'2026-06-18T04:00', local:'Uzbekistán', visit:'Colombia'},
+  // Grupo L
+  'G_L_0_1': {date:'2026-06-17T22:00', local:'Inglaterra', visit:'Croacia'},
+  'G_L_0_2': {date:'2026-06-23T22:00', local:'Inglaterra', visit:'Ghana'},
+  'G_L_0_3': {date:'2026-06-27T23:00', local:'Panamá', visit:'Inglaterra'},
+  'G_L_1_2': {date:'2026-06-24T01:00', local:'Panamá', visit:'Croacia'},
+  'G_L_1_3': {date:'2026-06-27T23:00', local:'Croacia', visit:'Ghana'},
+  'G_L_2_3': {date:'2026-06-18T01:00', local:'Ghana', visit:'Panamá'},
+};
 
 // Generate all group matches (6 per group, round-robin)
 const GROUP_MATCHES = [];
@@ -513,34 +656,34 @@ for(const [g, teams] of Object.entries(GRUPOS)){
 // M73-M88: Round of 32 (dieciseisavos)
 // Structure: {id, slot, desc} where desc shows the official matchup
 const BRACKET_R32 = [
-  {id:"M73", desc:"2ºA vs 2ºB"},
-  {id:"M74", desc:"1ºE vs 3er(mejor)"},
-  {id:"M75", desc:"1ºF vs 2ºC"},
-  {id:"M76", desc:"1ºC vs 2ºF"},
-  {id:"M77", desc:"1ºI vs 3er(mejor)"},
-  {id:"M78", desc:"2ºE vs 2ºI"},
-  {id:"M79", desc:"1ºA vs 3er(mejor)"},
-  {id:"M80", desc:"1ºL vs 3er(mejor)"},
-  {id:"M81", desc:"1ºD vs 3er(mejor)"},
-  {id:"M82", desc:"1ºG vs 3er(mejor)"},
-  {id:"M83", desc:"2ºK vs 2ºL"},
-  {id:"M84", desc:"1ºH vs 2ºJ"},
-  {id:"M85", desc:"1ºB vs 3er(mejor)"},
-  {id:"M86", desc:"1ºJ vs 2ºH"},
-  {id:"M87", desc:"1ºK vs 3er(mejor)"},
-  {id:"M88", desc:"2ºD vs 2ºG"},
+  {id:"M73", desc:"2ºA vs 2ºB",  date:"2026-06-28", venue:"Los Angeles"},
+  {id:"M74", desc:"1ºE vs 3er",  date:"2026-06-29", venue:"Boston"},
+  {id:"M75", desc:"1ºF vs 2ºC",  date:"2026-06-29", venue:"Monterrey"},
+  {id:"M76", desc:"1ºC vs 2ºF",  date:"2026-06-29", venue:"Houston"},
+  {id:"M77", desc:"1ºI vs 3er",  date:"2026-06-30", venue:"Nueva York"},
+  {id:"M78", desc:"2ºE vs 2ºI",  date:"2026-06-30", venue:"Dallas"},
+  {id:"M79", desc:"1ºA vs 3er",  date:"2026-06-30", venue:"Azteca"},
+  {id:"M80", desc:"1ºL vs 3er",  date:"2026-07-01", venue:"Atlanta"},
+  {id:"M81", desc:"1ºD vs 3er",  date:"2026-07-01", venue:"San Francisco"},
+  {id:"M82", desc:"1ºG vs 3er",  date:"2026-07-01", venue:"Seattle"},
+  {id:"M83", desc:"2ºK vs 2ºL",  date:"2026-07-02", venue:"Toronto"},
+  {id:"M84", desc:"1ºH vs 2ºJ",  date:"2026-07-02", venue:"Los Angeles"},
+  {id:"M85", desc:"1ºB vs 3er",  date:"2026-07-02", venue:"Vancouver"},
+  {id:"M86", desc:"1ºJ vs 2ºH",  date:"2026-07-03", venue:"Miami"},
+  {id:"M87", desc:"1ºK vs 3er",  date:"2026-07-03", venue:"Kansas City"},
+  {id:"M88", desc:"2ºD vs 2ºG",  date:"2026-07-03", venue:"Dallas"},
 ];
 
 // Octavos: winners of R32 pairs
 const BRACKET_R16 = [
-  {id:"M89", desc:"W74 vs W77", m1:"M74", m2:"M77"},  // 4 Jul - Philadelphia
-  {id:"M90", desc:"W73 vs W75", m1:"M73", m2:"M75"},  // 4 Jul - Houston
-  {id:"M91", desc:"W76 vs W78", m1:"M76", m2:"M78"},  // 5 Jul - MetLife
-  {id:"M92", desc:"W79 vs W80", m1:"M79", m2:"M80"},  // 5 Jul - Azteca
-  {id:"M93", desc:"W83 vs W84", m1:"M83", m2:"M84"},  // 6 Jul - Dallas
-  {id:"M94", desc:"W81 vs W82", m1:"M81", m2:"M82"},  // 6 Jul - Seattle
-  {id:"M95", desc:"W86 vs W88", m1:"M86", m2:"M88"},  // 7 Jul - Atlanta
-  {id:"M96", desc:"W85 vs W87", m1:"M85", m2:"M87"},  // 7 Jul - Vancouver
+  {id:"M89", desc:"W74 vs W77", m1:"M74", m2:"M77", date:"2026-07-04", venue:"Philadelphia"},
+  {id:"M90", desc:"W73 vs W75", m1:"M73", m2:"M75", date:"2026-07-04", venue:"Houston"},
+  {id:"M91", desc:"W76 vs W78", m1:"M76", m2:"M78", date:"2026-07-05", venue:"Nueva York"},
+  {id:"M92", desc:"W79 vs W80", m1:"M79", m2:"M80", date:"2026-07-05", venue:"Azteca"},
+  {id:"M93", desc:"W83 vs W84", m1:"M83", m2:"M84", date:"2026-07-06", venue:"Dallas"},
+  {id:"M94", desc:"W81 vs W82", m1:"M81", m2:"M82", date:"2026-07-06", venue:"Seattle"},
+  {id:"M95", desc:"W86 vs W88", m1:"M86", m2:"M88", date:"2026-07-07", venue:"Atlanta"},
+  {id:"M96", desc:"W85 vs W87", m1:"M85", m2:"M87", date:"2026-07-07", venue:"Vancouver"},
 ];
 
 // Cuartos
@@ -580,7 +723,8 @@ const PTS_DEFAULT = {
   g1:10, g2:5, terceros:2,
   exacto_grupos:10, quiniela:4,
   exacto_ko:10, exacto_ko_pen:5, pasa_ronda:3,
-  bracket:5,
+  bracket_cruce:15, bracket_pasa:10,
+  bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
   campeon:20, semi:15, tercero:10,
   gol1:5, gol2:3, gol3:1,
   asist1:5, asist2:3, asist3:1,
@@ -752,7 +896,12 @@ function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.
 // ═══ UTILS ════════════════════════════════════════════════
 function simpleHash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
-function cmp(a,b){ return !!(a&&b&&String(a).trim().toLowerCase()===String(b).trim().toLowerCase()); }
+function cmp(a,b){
+  if(!a||!b) return false;
+  const na=normalizeTeam(String(a)).toLowerCase();
+  const nb=normalizeTeam(String(b)).toLowerCase();
+  return na===nb;
+}
 function cmpPool(val, pool){ if(!val||!pool) return false; return pool.some(v=>cmp(val,v)); }
 function fmtDate(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleString('es-ES',{timeZone:'Europe/Madrid'}); }catch(e){return iso;} }
 function closeModal(id){ document.getElementById(id).style.display='none'; }
@@ -784,7 +933,7 @@ async function loadAllPronos(){
 function listenMeta(){
   onSnapshot(doc(db,"meta","resultados"),d=>{
     resultados=d.exists()?d.data():{};
-    if(isActive('ranking')){ renderRanking(); }
+    if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); }
     if(isActive('pronosticos')) renderPronosticos();
     if(isActive('normas')) renderNormas();
     if(isActive('bracket')) renderBracket();
@@ -827,13 +976,21 @@ window.startLogin=async function(name){
     return;
   }
   const pl=players[name];
+  // Highlight selected circle
+  document.querySelectorAll('.login-circle-av').forEach(el=>el.classList.remove('av-selected'));
+  document.querySelectorAll('.login-circle').forEach(el=>{
+    if(el.querySelector('.login-circle-name')?.textContent===name)
+      el.querySelector('.login-circle-av')?.classList.add('av-selected');
+  });
   if(pl?.pwHash){
     pendingLogin=name;
-    document.getElementById('pw-modal').style.display='block';
-    document.getElementById('pw-modal-name').textContent='Entrar como '+name;
+    const inlinePw=document.getElementById('pw-inline');
+    inlinePw.style.display='block';
+    document.getElementById('pw-inline-name').textContent='Hola '+name+' '+(pl.avatar||'⚽');
     document.getElementById('pw-input').value='';
     document.getElementById('pw-error').style.display='none';
-    setTimeout(()=>document.getElementById('pw-input').focus(),100);
+    inlinePw.scrollIntoView({behavior:'smooth',block:'nearest'});
+    setTimeout(()=>document.getElementById('pw-input').focus(),300);
   } else { await doLogin(name); }
 };
 
@@ -845,7 +1002,8 @@ window.loginConPw=function(){
   } else { document.getElementById('pw-error').style.display='block'; }
 };
 window.cancelPw=function(){
-  document.getElementById('pw-modal').style.display='none';
+  document.getElementById('pw-inline').style.display='none';
+  document.querySelectorAll('.login-circle-av').forEach(el=>el.classList.remove('av-selected'));
   pendingLogin=null;
 };
 
@@ -984,13 +1142,38 @@ function calcPoints(player){
     });
   });
 
-  // Bracket (pre-Mundial)
+  // Bracket (pre-Mundial) - cruce + quién pasa
   if(p.bracket){
     ALL_BRACKET.forEach(m=>{
       const myPick=p.bracket[m.id];
       const realWinner=partidos['KO_'+m.id]?.ganador;
-      if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Bracket '+m.id+': '+myPick,getPts('bracket'));
+      const realLocal=resultados.koNames?.[m.id]?.local||partidos['KO_'+m.id]?.local;
+      const realVisit=resultados.koNames?.[m.id]?.visit||partidos['KO_'+m.id]?.visit;
+      const isFinal=m.id==='M104';
+      const is3rd=m.id==='M103';
+
+      // Acertar el cruce: los dos equipos de ese partido coinciden con los del jugador
+      const [myT1,myT2]=getTeamsForBracket(p,m.id);
+      const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
+        ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
+
+      if(isFinal||is3rd){
+        if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
+        if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
+        if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
+      } else {
+        if(cruce_ok) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
+        if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Pasa '+m.id+': '+myPick,getPts('bracket_pasa'));
+      }
     });
+  }
+
+  function getTeamsForBracket(pp,matchId){
+    const r32t=resolveR32Teams(currentUser||Object.keys(players)[0]);
+    if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
+    const m2=ALL_BRACKET.find(x=>x.id===matchId);
+    if(!m2) return [null,null];
+    return [pp.bracket?.[m2.m1]||null, pp.bracket?.[m2.m2]||null];
   }
 
   // Mini-retos
@@ -1086,21 +1269,30 @@ function renderLogin(){
   renderAvatarPicker('reg-avatar-picker','⚽',null);
   const el=document.getElementById('player-list');
   const names=Object.keys(players);
-  if(!names.length){ el.innerHTML='<div style="color:var(--t3);font-size:13px">Sé el primero en registrarte</div>'; return; }
-  const sorted=names.map(n=>{const pts=pronosticos[n]?calcPoints(n).total:0;return{n,pts}}).sort((a,b)=>b.pts-a.pts);
-  el.innerHTML=sorted.map(x=>{
+  if(!names.length){ el.innerHTML='<div style="color:var(--t3);font-size:13px;text-align:center">Sé el primero en registrarte 👇</div>'; return; }
+  const sorted=names.map(n=>{const pts=pronosticos[n]?calcPoints(n).total:0;return{n,pts};}).sort((a,b)=>b.pts-a.pts);
+  const crowns=['🥇','🥈','🥉'];
+  el.innerHTML=`<div class="login-circles">${sorted.map((x,i)=>{
     const pl=players[x.n]||{};
-    const rank=getRankFromSorted(x.n,sorted);
-    const borderClass=rank===1?'av-gold':rank===2?'av-silver':rank===3?'av-bronze':'';
-    return `<button class="login-btn" onclick="startLogin('${esc(x.n)}')">
-      <div class="login-btn-left">
-        <div class="user-avatar-sm ${borderClass}">${pl.avatar||'⚽'}</div>
-        <span>${x.n}</span>
+    const borderClass=i===0?'av-gold':i===1?'av-silver':i===2?'av-bronze':'';
+    return `<div class="login-circle" onclick="startLogin('${esc(x.n)}')">
+      <div class="login-circle-av ${borderClass}">
+        ${i<3?`<div class="login-circle-crown">${crowns[i]}</div>`:''}
+        ${pl.avatar||'⚽'}
       </div>
-      <span class="pts">${x.pts} pts</span>
-    </button>`;
-  }).join('');
+      <div class="login-circle-name">${x.n}</div>
+      <div class="login-circle-pts">${x.pts} pts</div>
+    </div>`;
+  }).join('')}</div>`;
 }
+
+window.toggleAvatarPicker=function(){
+  const el=document.getElementById('reg-avatar-picker');
+  const isOpen=el.style.display!=='none';
+  el.style.display=isOpen?'none':'block';
+};
+
+
 function getRankFromSorted(name,sorted){ return sorted.findIndex(x=>x.n===name)+1; }
 
 // ═══ RENDER: RANKING ════════════════════════════════════
@@ -2002,27 +2194,34 @@ function renderNormas(){
       <div class="norma-item"><span class="norma-pts">+${getPts('g2')}</span><span>Acertar el 2º de cada grupo</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('terceros')}</span><span>Cada selección acertada entre los mejores terceros (pool de 8)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_grupos')}</span><span>Resultado exacto de cualquier partido de grupos (90 min)</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('quiniela')}</span><span>Acertar solo el 1/X/2 sin acertar el marcador exacto</span></div>
-    </div>
-    <div class="norma-section"><h3>📌 Fase eliminatoria (ronda a ronda)</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko')}</span><span>Resultado exacto KO incluyendo prórroga + acertar penaltis</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>Acertar marcador KO pero fallar ganador en penaltis</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('quiniela')}</span><span>Acertar solo el 1/X/2 — ACUMULABLE con el exacto (máx +${getPts('exacto_grupos')+getPts('quiniela')} pts por partido)</span></div>
     </div>
     <div class="norma-section"><h3>🗂️ Bracket (antes del Mundial)</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('bracket')}</span><span>Por cada cruce acertado en el bracket (desde dieciseisavos)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('bracket_cruce')}</span><span>Acertar que dos equipos se cruzan en esa ronda (da igual el orden)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('bracket_pasa')}</span><span>Acertar quién pasa ese partido del bracket</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('bracket_cruce')+getPts('bracket_pasa')}</span><span>Ambos (máx por partido de bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')}</span><span>Acertar el cruce de la FINAL o del 3er puesto</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_gana')}</span><span>Acertar el ganador de la Final (adicional)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_tercero')}</span><span>Acertar el 3er puesto (adicional)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')+getPts('bracket_final_gana')+getPts('bracket_tercero')}</span><span>Máximo si aciertas todo de Final y 3er puesto</span></div>
+    </div>
+    <div class="norma-section"><h3>📌 Fase eliminatoria (ronda a ronda)</h3>
+      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko')}</span><span>Resultado exacto KO (90min+prórroga) + acertar penaltis</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>Acertar marcador KO pero fallar ganador en penaltis</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
     </div>
     <div class="norma-section"><h3>🏆 Clasificación final</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('campeon')}</span><span>Acertar el campeón del Mundial</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('semi')}</span><span>Cada semifinalista acertado (pool de 4, sin orden)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('tercero')}</span><span>Acertar el 3er puesto</span></div>
     </div>
-    <div class="norma-section"><h3>⚽ Máximo goleador y asistente</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('gol1')}/${getPts('gol2')}/${getPts('gol3')}</span><span>1er/2º/3er máximo goleador (validación manual del admin)</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('asist1')}/${getPts('asist2')}/${getPts('asist3')}</span><span>1er/2º/3er máximo asistente (validación manual del admin)</span></div>
-    </div>
-    <div class="norma-section"><h3>🥇 Balón de Oro</h3>
+    <div class="norma-section"><h3>⚽ Premios individuales</h3>
+      <div class="norma-item"><span class="norma-pts">+${getPts('gol1')}/${getPts('gol2')}/${getPts('gol3')}</span><span>1er/2º/3er máximo goleador</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('asist1')}/${getPts('asist2')}/${getPts('asist3')}</span><span>1er/2º/3er máximo asistente</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('balon1')}/${getPts('balon2')}/${getPts('balon3')}</span><span>Balón de Oro/Plata/Bronce</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_equipo')}</span><span>Acertar el equipo del primer gol del Mundial</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_jugador')}</span><span>Acertar el jugador del primer gol</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_minuto')}</span><span>Acertar el minuto exacto del primer gol</span></div>
     </div>
     <div class="norma-section"><h3>🤝 Desempate</h3>
       <div class="norma-item"><span style="color:var(--gold);font-weight:800;min-width:20px">1</span><span>Quien acertó el campeón</span></div>
@@ -2031,13 +2230,15 @@ function renderNormas(){
       <div class="norma-item"><span style="color:var(--gold);font-weight:800;min-width:20px">4</span><span>Se comparte la victoria</span></div>
     </div>
     <div class="norma-section"><h3>📋 Normas adicionales</h3>
-      <div class="norma-item">⏰ Pronósticos de grupos: antes del primer partido (11 Jun)</div>
-      <div class="norma-item">⏰ Bracket completo: antes del primer partido</div>
+      <div class="norma-item">⏰ Pronósticos de grupos y bracket: antes del primer partido</div>
       <div class="norma-item">⏰ Cada ronda KO: se bloquea cuando empieza el primer partido de esa ronda</div>
+      <div class="norma-item">🗂️ El bracket se rellena completo antes del Mundial — sin depender de rondas</div>
       <div class="norma-item">💰 Bote: 10€ por jugador</div>
-      <div class="norma-item">🎲 Resultado exacto grupos: solo 90 min</div>
-      <div class="norma-item">⚽ Resultado exacto KO: 90 min + prórroga. Penaltis en campo "Pen?"</div>
-      <div class="norma-item">🏊 Semifinalistas = pool de 4 sin orden. Terceros = pool de 8 sin orden</div>
+      <div class="norma-item">🎲 Exacto grupos y quiniela son ACUMULABLES — puedes sumar ambos por el mismo partido</div>
+      <div class="norma-item">⚽ Exacto KO: 90 min + prórroga. Penaltis en campo "Pen?"</div>
+      <div class="norma-item">🏊 Semifinalistas = pool de 4 sin orden · Terceros = pool de 8 sin orden</div>
+      <div class="norma-item">🗂️ Bracket: acertar cruce = los dos equipos coinciden da igual el orden</div>
+      <div class="norma-item">⚙️ Todos los puntos son configurables por el admin</div>
     </div>`;
 }
 
@@ -2067,7 +2268,14 @@ function renderPerfil(){
     <div class="card" style="margin-top:12px">
       <div class="card-title">📋 Tutorial</div>
       <button class="btn btn-s btn-sm" onclick="showOnboarding()">Ver tutorial de nuevo</button>
-    </div>`;
+    </div>
+    ${!isAdmin?`<div class="card" style="margin-top:12px">
+      <div class="card-title">🔐 Código admin</div>
+      <div style="display:flex;gap:8px">
+        <input type="password" class="fi" id="admin-pw-perfil" placeholder="Código admin..." style="flex:1">
+        <button class="btn btn-p btn-sm" onclick="activarAdminDesde()">Activar</button>
+      </div>
+    </div>`:'<div class="card" style="margin-top:12px;border-color:var(--green)"><div class="card-title" style="color:#4ade80">✅ Modo admin activo</div></div>'}`;
   renderAvatarPicker('perfil-avatar-picker', pl.avatar||'⚽', null);
   // Pre-select current avatar
   selectedAvatar=pl.avatar||'⚽';
@@ -3081,19 +3289,66 @@ window.setCompPhase=function(phase){
   renderComparador();
 };
 
+// ═══ PARTIDO DEL DÍA ════════════════════════════════════════════════════
+function renderPartidoDelDia(){
+  const el=document.getElementById('partido-del-dia');
+  if(!el) return;
+  const now=new Date();
+  const todayStr=now.toISOString().split('T')[0];
+  // Find today's matches from fixture
+  const todayMatches=Object.entries(FIXTURE_DATES).filter(([id,m])=>{
+    return m.date&&m.date.startsWith(todayStr);
+  }).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+  
+  // Find next upcoming match
+  const upcoming=Object.entries(FIXTURE_DATES).filter(([id,m])=>{
+    return m.date&&new Date(m.date)>now;
+  }).sort((a,b)=>new Date(a[1].date)-new Date(b[1].date));
+
+  if(!todayMatches.length&&!upcoming.length){el.innerHTML='';return;}
+
+  const featured=todayMatches.length?todayMatches:upcoming.slice(0,2);
+  const label=todayMatches.length?'⚽ Partidos de hoy':'⏭️ Próximos partidos';
+
+  const matchCards=featured.slice(0,3).map(([id,m])=>{
+    const rm=partidos[id];
+    const hasResult=rm&&rm.gl!=null;
+    const matchTime=new Date(m.date).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});
+    return `<div style="background:rgba(255,255,255,.06);border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:200px">
+      <div>
+        <div style="font-size:11px;color:var(--t1);font-weight:600">${m.local} vs ${m.visit}</div>
+        <div style="font-size:10px;color:var(--t3)">${matchTime}h</div>
+      </div>
+      ${hasResult
+        ?`<div style="font-size:16px;font-weight:800;color:var(--gold)">${rm.gl}-${rm.gv}</div>`
+        :`<div style="font-size:10px;color:var(--t3)">Pendiente</div>`}
+    </div>`;
+  }).join('');
+
+  el.innerHTML=`<div style="background:linear-gradient(135deg,rgba(61,0,107,.6),rgba(139,26,26,.4));border:1px solid var(--brd);border-radius:10px;padding:12px 14px;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:800;color:var(--gold);margin-bottom:8px;letter-spacing:.5px">${label}</div>
+    <div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">${matchCards}</div>
+  </div>`;
+}
+
 // ═══ NAV ════════════════════════════════════════════════
 window.go=function(tab){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
   ['ranking','pronosticos','bracket','partidos','retos','stats','avisos','normas','perfil','comparador','admin'].forEach(p=>{
     document.getElementById(p+'-page').classList.toggle('on',p===tab);
   });
-  if(tab==='ranking'){ renderRanking(); checkRondaBanners(); }
+  if(tab==='ranking'){ renderRanking(); checkRondaBanners(); renderPartidoDelDia(); updateBadges(); }
   else if(tab==='pronosticos') renderPronosticos();
   else if(tab==='bracket') renderBracket();
   else if(tab==='partidos') renderPartidos();
   else if(tab==='retos') renderRetos();
   else if(tab==='stats') renderStats();
-  else if(tab==='avisos') renderAvisos();
+  else if(tab==='avisos'){
+    renderAvisos();
+    // Mark avisos as read
+    if(currentUser) localStorage.setItem('avisos_read_'+currentUser, (resultados.avisos||[]).length);
+    const b=document.getElementById('badge-avisos'); if(b) b.style.display='none';
+  }
   else if(tab==='normas') renderNormas();
   else if(tab==='perfil') renderPerfil();
   else if(tab==='comparador') renderComparador();
@@ -3185,6 +3440,60 @@ window.descargarCaptura=function(imgData){
   a.href=imgData;
   a.download='ranking_porra2026_'+new Date().toISOString().split('T')[0]+'.png';
   a.click();
+};
+
+// ═══ BADGES ══════════════════════════════════════════════════════════
+function updateBadges(){
+  if(!currentUser) return;
+  const p=pronosticos[currentUser]||{};
+  const res=resultados||{};
+
+  // Badge Avisos: hay avisos no leídos
+  const lastRead=parseInt(localStorage.getItem('avisos_read_'+currentUser)||'0');
+  const avisoCount=(res.avisos||[]).length;
+  const badgeAvisos=document.getElementById('badge-avisos');
+  if(badgeAvisos) badgeAvisos.style.display=avisoCount>lastRead?'block':'none';
+
+  // Badge Retos: hay reto abierto sin responder
+  const retosAbiertos=retos.filter(r=>r.activo&&!r.cerrado&&!(p.retos?.[r.id]));
+  const badgeRetos=document.getElementById('badge-retos');
+  if(badgeRetos) badgeRetos.style.display=retosAbiertos.length>0?'block':'none';
+
+  // Badge Pronós: pronósticos sin rellenar (solo si no cerrados)
+  const pronosPct=pronosCount(currentUser).pct;
+  const badgePronos=document.getElementById('badge-pronos');
+  if(badgePronos) badgePronos.style.display=(!p._locked&&pronosPct<100)?'block':'none';
+
+  // Badge Bracket: picks KO pendientes con bracket abierto
+  if(!res.bracket_locked){
+    const pendingPicks=ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length;
+    const badgeBracket=document.getElementById('badge-bracket');
+    if(badgeBracket) badgeBracket.style.display=pendingPicks>0?'block':'none';
+  }
+
+  // Notificación si admin reabrió pronósticos
+  if(!p._locked&&p._historial?.some(h=>h.accion==='reabierto_por_admin')){
+    const lastNotif=localStorage.getItem('reopen_notif_'+currentUser);
+    const lastReopen=p._historial.filter(h=>h.accion==='reabierto_por_admin').pop()?.fecha;
+    if(lastReopen&&lastReopen!==lastNotif){
+      localStorage.setItem('reopen_notif_'+currentUser,lastReopen);
+      showToast('🔓 El admin ha reabierto tus pronósticos — puedes editarlos');
+    }
+  }
+}
+
+// Activar admin desde dentro de la app (en perfil)
+window.activarAdminDesde=function(){
+  const pw=document.getElementById('admin-pw-perfil')?.value;
+  if(pw===ADMIN_PASS){
+    isAdmin=true;
+    document.getElementById('admin-tab').style.display='flex';
+    document.getElementById('admin-pw-perfil').value='';
+    showToast('✅ Modo admin activado');
+    renderPerfil();
+  } else {
+    alert('Código incorrecto');
+  }
 };
 
 // ═══ BOOT ════════════════════════════════════════════════
