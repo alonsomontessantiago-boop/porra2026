@@ -1477,7 +1477,7 @@ function renderPronosticos(){
           <input type="number" min="0" max="20" class="si" id="pm-${m.id}-gv" value="${pm.gv??''}" ${locked?'readonly':''}>
         </div>
       </div>`;
-    }).join('');
+    }).join('')+shareBtn;
 
     // Show computed table
     const myOrder=myTable[g];
@@ -2026,9 +2026,12 @@ function renderRetos(){
   const activeRetos=retos.filter(r=>r.activo).sort((a,b)=>{
     const aCerrado=a.cerrado||new Date()>new Date(a.deadline);
     const bCerrado=b.cerrado||new Date()>new Date(b.deadline);
-    if(aCerrado&&!bCerrado) return 1;
-    if(!aCerrado&&bCerrado) return -1;
-    return 0;
+    const aGanado=a.ganadores?.[currentUser];
+    const bGanado=b.ganadores?.[currentUser];
+    // Order: open(0) → closed+lost(1) → won(2)
+    const aScore=!aCerrado?0:aGanado?2:1;
+    const bScore=!bCerrado?0:bGanado?2:1;
+    return aScore-bScore;
   });
 
   if(!activeRetos.length){
@@ -2041,7 +2044,7 @@ function renderRetos(){
     <button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button>
   </div>`;
 
-  el.innerHTML=shareBtn+activeRetos.map(r=>{
+  el.innerHTML=activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
@@ -2074,13 +2077,17 @@ function renderRetos(){
     // My answer display
     let myAnswerHtml='';
     if(myRespuesta){
-      myAnswerHtml=`<div style="background:${haGanado?'rgba(232,168,32,.1)':'rgba(255,255,255,.04)'};border:1px solid ${haGanado?'var(--goldd)':'var(--brd)'};border-radius:8px;padding:10px 12px;margin-top:10px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:18px">${haGanado?'🏆':'📝'}</span>
+      const answerBg=haGanado?'rgba(232,168,32,.1)':perdido?'rgba(232,50,50,.08)':'rgba(255,255,255,.04)';
+      const answerBorder=haGanado?'var(--goldd)':perdido?'rgba(232,50,50,.4)':'var(--brd)';
+      const answerIcon=haGanado?'🏆':perdido?'❌':'📝';
+      const answerColor=haGanado?'var(--gold)':perdido?'#f87171':'var(--t1)';
+      myAnswerHtml=`<div style="background:${answerBg};border:1px solid ${answerBorder};border-radius:8px;padding:10px 12px;margin-top:10px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">${answerIcon}</span>
         <div>
           <div style="font-size:10px;color:var(--t3);margin-bottom:2px">Tu respuesta</div>
-          <div style="font-size:14px;font-weight:700;color:${haGanado?'var(--gold)':'var(--t1)'}">${myRespuesta}</div>
+          <div style="font-size:14px;font-weight:700;color:${answerColor}">${myRespuesta}</div>
         </div>
-        ${haGanado?`<span style="margin-left:auto;font-size:20px;font-weight:800;color:var(--gold)">+${r.pts} pts</span>`:''}
+        ${haGanado?`<span style="margin-left:auto;font-size:20px;font-weight:800;color:var(--gold)">+${r.pts} pts</span>`:perdido?`<span style="margin-left:auto;font-size:11px;color:#f87171">No acertado</span>`:''}
       </div>`;
     }
 
@@ -2122,7 +2129,10 @@ function renderRetos(){
       }
     }
 
-    return `<div style="background:var(--s1);border:1px solid ${haGanado?'var(--goldd)':cerrado?'var(--brd2)':'var(--brd)'};border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s">
+    const perdido=cerrado&&!haGanado&&myRespuesta;
+    const borderColor=haGanado?'var(--goldd)':perdido?'rgba(232,50,50,.4)':cerrado?'var(--brd2)':'var(--purple)';
+    const bgColor=haGanado?'rgba(232,168,32,.05)':perdido?'rgba(232,50,50,.05)':'var(--s1)';
+    return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
         <div style="flex:1">
           <div style="font-size:16px;font-weight:800;color:var(--t1);margin-bottom:4px">${r.titulo}</div>
