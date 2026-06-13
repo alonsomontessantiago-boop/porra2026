@@ -2046,9 +2046,9 @@ function renderRetos(){
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
-    // A reto is "resolved" when admin has marked at least one winner
-    const resuelto=cerrado&&r.ganadores&&Object.values(r.ganadores).some(v=>v);
-    const perdido=resuelto&&!haGanado&&myRespuesta;
+    // Only show as lost when admin explicitly marks reto as resuelto
+    const resuelto=r.resuelto===true;
+    const perdido=resuelto&&!haGanado;
     const totalResp=Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length;
     const total=Object.keys(players).length;
 
@@ -2729,7 +2729,8 @@ function renderAdmin(){
           ${r.activo?`<button class="btn-xs btn-danger" onclick="toggleReto(${i},false)">Desactivar</button>`
             :`<button class="btn-xs btn-g" onclick="toggleReto(${i},true)">Activar</button>`}
           <button class="btn-xs btn-s" onclick="editarReto(${i})">✏️</button>
-          <button class="btn-xs ${r.cerrado?'btn-g':'btn-s'}" onclick="cerrarRespuestasReto(${i})">${r.cerrado?'🔓 Abrir':'🔒 Cerrar resp.'}</button>
+          <button class="btn-xs ${r.cerrado?'btn-g':'btn-s'}" onclick="cerrarRespuestasReto(${i})">${r.cerrado?'🔓 Abrir':'🔒 Cerrar'}</button>
+          <button class="btn-xs ${r.resuelto?'btn-danger':'btn-s'}" onclick="marcarResuelto(${i})">${r.resuelto?'✓ Resuelto':'Resolver'}</button>
           <button class="btn-xs btn-danger" onclick="deleteReto(${i})">🗑️</button>
         </div>
       </div>
@@ -3111,6 +3112,13 @@ window.deleteReto=async function(idx){
   if(!confirm('¿Eliminar reto?')) return;
   const newRetos=retos.filter((_,i)=>i!==idx);
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
+};
+
+window.marcarResuelto=async function(idx){
+  const newRetos=[...retos];
+  newRetos[idx]={...newRetos[idx], resuelto:!newRetos[idx].resuelto};
+  await setDoc(doc(db,'meta','retos'),{list:newRetos});
+  renderAdmin();
 };
 
 window.cerrarRespuestasReto=async function(idx){
