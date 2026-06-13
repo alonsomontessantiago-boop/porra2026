@@ -1338,7 +1338,7 @@ function renderRanking(){
   const med=['🥇','🥈','🥉'];
   
   el.innerHTML=`<table class="rank-table">
-    <thead><tr><th width="32">#</th><th>Jugador</th><th width="70">Pts</th><th>Desglose</th></tr></thead>
+    <thead><tr><th width="28">#</th><th>Jugador</th><th width="52" style="text-align:center">Pts</th><th width="42" style="text-align:center;font-size:9px">Exact.</th><th width="42" style="text-align:center;font-size:9px">Quin.</th><th width="42" style="text-align:center;font-size:9px">Grupos</th><th width="42" style="text-align:center;font-size:9px">Elim.</th><th width="42" style="text-align:center;font-size:9px">Brack.</th><th width="42" style="text-align:center;font-size:9px">Prem.</th></tr></thead>
     <tbody>${ranked.map(({n,p},i)=>{
       const pl=players[n]||{};
       const borderClass=i===0?'av-gold':i===1?'av-silver':i===2?'av-bronze':'';
@@ -1356,15 +1356,12 @@ function renderRanking(){
           </div>
         </td>
         <td><span class="pts-badge">${p.total}</span></td>
-        <td><div class="pts-break">${[
-          p.clasif?'Clasif:'+p.clasif:'',
-          p.grupos?'Grupos:'+p.grupos:'',
-          p.exactos?'Exactos:'+p.exactos:'',
-          p.quiniela?'Quin:'+p.quiniela:'',
-          p.elim?'Elim:'+p.elim:'',
-          p.bracket_pts?'Bracket:'+p.bracket_pts:'',
-          p.premios?'Prem:'+p.premios:'',
-        ].filter(Boolean).join(' · ')}</div></td>
+        <td style="text-align:center;font-size:12px;font-weight:700;color:var(--t2)">${p.exactos||'—'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--t3)">${p.quiniela||'—'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--t3)">${p.grupos||'—'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--t3)">${p.elim||'—'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--t3)">${p.bracket_pts||'—'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--t3)">${(p.clasif||0)+(p.premios||0)||'—'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>
@@ -3570,19 +3567,17 @@ function renderPartidoDelDia(){
   const now=new Date();
   const todayStr=now.toISOString().split('T')[0];
   // Find today's matches from fixture
-  const todayMatches=Object.entries(FIXTURE_DATES).filter(([id,m])=>{
-    return m.date&&m.date.startsWith(todayStr);
-  }).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+  // Last played match (most recent with result)
+  const allMatches=Object.entries(FIXTURE_DATES).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+  const played=allMatches.filter(([id,m])=>partidos[id]?.gl!=null);
+  const upcoming=allMatches.filter(([id,m])=>!partidos[id]?.gl!=null||partidos[id]?.gl==null).filter(([id,m])=>new Date(m.date)>new Date(now.getTime()-7200000));
   
-  // Find next upcoming match
-  const upcoming=Object.entries(FIXTURE_DATES).filter(([id,m])=>{
-    return m.date&&new Date(m.date)>now;
-  }).sort((a,b)=>new Date(a[1].date)-new Date(b[1].date));
-
-  if(!todayMatches.length&&!upcoming.length){el.innerHTML='';return;}
-
-  const featured=todayMatches.length?todayMatches:upcoming.slice(0,2);
-  const label=todayMatches.length?'⚽ Partidos de hoy':'⏭️ Próximos partidos';
+  const lastPlayed=played.length?[played[played.length-1]]:[];
+  const next3=upcoming.slice(0,3);
+  const featured=[...lastPlayed,...next3];
+  
+  if(!featured.length){el.innerHTML='';return;}
+  const label='⚽ Partidos';
 
   const matchCards=featured.slice(0,3).map(([id,m])=>{
     const rm=partidos[id];
