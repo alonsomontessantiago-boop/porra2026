@@ -2331,7 +2331,23 @@ window.cambiarPw=async function(){
 };
 
 // ═══ RENDER: ADMIN ════════════════════════════════════
+function getOpenSections(){
+  const open=[];
+  document.querySelectorAll('.admin-sec-body.open').forEach(el=>open.push(el.id));
+  return open;
+}
+function restoreOpenSections(open){
+  open.forEach(id=>{
+    const body=document.getElementById(id);
+    const sid=id.replace('adminsec-','');
+    const arrow=document.getElementById('adminarrow-'+sid);
+    if(body) body.classList.add('open');
+    if(arrow) arrow.classList.add('open');
+  });
+}
+
 function renderAdmin(){
+  const wasOpen=getOpenSections();
   if(!isAdmin){ document.getElementById('admin-content').innerHTML='<div class="empty">Acceso restringido</div>';return; }
   const res=resultados||{};
   
@@ -2622,6 +2638,9 @@ function renderAdmin(){
       <div style="font-size:12px;color:var(--t3)">Jugadores: ${Object.keys(players).length}</div>
       ${playersHtml}
     </div></div>`;
+
+  // Restore open sections after re-render
+  setTimeout(()=>restoreOpenSections(wasOpen), 0);
 
   // Autofill reto template
   document.getElementById('reto-template')?.addEventListener('change',function(){
