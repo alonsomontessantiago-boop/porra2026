@@ -2037,9 +2037,9 @@ function renderRetos(){
   }
 
   // Share button at top
-  const shareBtn=isAdmin?`<div style="margin-bottom:12px">
+  const shareBtn=`<div style="margin-bottom:12px">
     <button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button>
-  </div>`:'';
+  </div>`;
 
   el.innerHTML=shareBtn+activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
