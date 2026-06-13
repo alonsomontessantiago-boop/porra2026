@@ -1477,7 +1477,7 @@ function renderPronosticos(){
           <input type="number" min="0" max="20" class="si" id="pm-${m.id}-gv" value="${pm.gv??''}" ${locked?'readonly':''}>
         </div>
       </div>`;
-    }).join('')+shareBtn;
+    }).join('');
 
     // Show computed table
     const myOrder=myTable[g];
@@ -2147,7 +2147,7 @@ function renderRetos(){
       ${myAnswerHtml}
       ${inputHtml}
     </div>`;
-  }).join('');
+  }).join('')+shareBtn;
 }
 
 window.mostrarSelectorCaptura=function(){
