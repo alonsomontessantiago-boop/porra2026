@@ -895,6 +895,25 @@ function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.
 
 // ═══ UTILS ════════════════════════════════════════════════
 function simpleHash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
+
+// Admin collapsible sections
+window.toggleAdminSec=function(id){
+  const body=document.getElementById('adminsec-'+id);
+  const arrow=document.getElementById('adminarrow-'+id);
+  if(!body||!arrow) return;
+  const isOpen=body.classList.contains('open');
+  body.classList.toggle('open',!isOpen);
+  arrow.classList.toggle('open',!isOpen);
+};
+function adminSec(id, icon, title, content, startOpen=false){
+  return `<div style="margin-bottom:8px">
+    <div class="admin-sec-hdr" onclick="toggleAdminSec('${id}')">
+      <h3>${icon} ${title}</h3>
+      <span class="admin-sec-arrow ${startOpen?'open':''}" id="adminarrow-${id}">▼</span>
+    </div>
+    <div class="admin-sec-body ${startOpen?'open':''}" id="adminsec-${id}">${content}</div>
+  </div>`;
+}
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
 function cmp(a,b){
   if(!a||!b) return false;
@@ -2468,6 +2487,7 @@ function renderAdmin(){
           ${r.activo?`<button class="btn-xs btn-danger" onclick="toggleReto(${i},false)">Desactivar</button>`
             :`<button class="btn-xs btn-g" onclick="toggleReto(${i},true)">Activar</button>`}
           <button class="btn-xs btn-s" onclick="editarReto(${i})">✏️</button>
+          <button class="btn-xs ${r.cerrado?'btn-g':'btn-s'}" onclick="cerrarRespuestasReto(${i})">${r.cerrado?'🔓 Abrir':'🔒 Cerrar resp.'}</button>
           <button class="btn-xs btn-danger" onclick="deleteReto(${i})">🗑️</button>
         </div>
       </div>
@@ -2508,8 +2528,7 @@ function renderAdmin(){
     </div>`;
 
   document.getElementById('admin-content').innerHTML=`
-    <div class="admin-section">
-      <h3>📢 Enviar aviso</h3>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec1')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">📢 Enviar aviso</h3><span class="admin-sec-arrow" id="adminarrow-sec1">▼</span></div><div class="admin-sec-body" id="adminsec-sec1">
       <div class="field"><input type="text" class="fi" id="av-msg" placeholder="Mensaje para todos..."></div>
       <button class="btn btn-p btn-sm" onclick="enviarAviso()">Enviar</button>
       <div style="margin-top:10px">
@@ -2522,18 +2541,16 @@ function renderAdmin(){
             </div>
           </div>`).join('')}
       </div>
-    </div>
-    <div class="admin-section">
-      <h3>⏱️ Cuenta atrás</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec2')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⏱️ Cuenta atrás</h3><span class="admin-sec-arrow" id="adminarrow-sec2">▼</span></div><div class="admin-sec-body" id="adminsec-sec2">
       <div class="field"><label>Etiqueta</label><input type="text" class="fi" id="cd-label" value="${esc(res.deadline_label||'')}" placeholder="Plazo para..."></div>
       <div class="field"><label>Fecha y hora (hora Madrid)</label><input type="datetime-local" class="fi" id="cd-fecha" value="${res.deadline_fecha||''}"></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-p btn-sm" onclick="guardarDeadline()">Guardar</button>
         <button class="btn btn-s btn-sm" onclick="borrarDeadline()">Quitar</button>
       </div>
-    </div>
-    <div class="admin-section">
-      <h3>🔓 Fases eliminatorias</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec3')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🔓 Fases eliminatorias</h3><span class="admin-sec-arrow" id="adminarrow-sec3">▼</span></div><div class="admin-sec-body" id="adminsec-sec3">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${fasesHtml}</div>
       <div style="margin-top:10px">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
@@ -2541,22 +2558,19 @@ function renderAdmin(){
           🗂️ Bracket cerrado (mostrar pronósticos de todos)
         </label>
       </div>
-    </div>
-    <div class="admin-section">
-      <h3>⚙️ Sistema de puntos</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec4')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚙️ Sistema de puntos</h3><span class="admin-sec-arrow" id="adminarrow-sec4">▼</span></div><div class="admin-sec-body" id="adminsec-sec4">
       <div class="pts-grid">
         ${['campeon','semi','tercero','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','terceros','gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].map(k=>ptsField(k,k)).join('')}
       </div>
       <button class="btn btn-p btn-sm" onclick="guardarPuntos()">Guardar puntos</button>
-    </div>
-    <div class="admin-section">
-      <h3>🏆 Resultados reales — Tablas de grupos</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec5')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🏆 Resultados reales — Tablas de grupos</h3><span class="admin-sec-arrow" id="adminarrow-sec5">▼</span></div><div class="admin-sec-body" id="adminsec-sec5">
       <p class="note">Introduce el orden real de clasificación de cada grupo.</p>
       ${gruposResHtml}
       <button class="btn btn-p btn-sm" onclick="guardarTablas()">Guardar tablas</button>
-    </div>
-    <div class="admin-section">
-      <h3>🎯 Mejores terceros reales</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec6')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎯 Mejores terceros reales</h3><span class="admin-sec-arrow" id="adminarrow-sec6">▼</span></div><div class="admin-sec-body" id="adminsec-sec6">
       ${Array.from({length:8},(_,i)=>{
         const key='mejor_tercero_'+(i+1);
         return `<div class="res-row"><label>Tercero ${i+1}</label>
@@ -2566,13 +2580,11 @@ function renderAdmin(){
           </select></div>`;
       }).join('')}
       <button class="btn btn-p btn-sm" onclick="guardarTerceros()">Guardar terceros</button>
-    </div>
-    <div class="admin-section">
-      <h3>🏅 Validación premios individuales</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec7')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🏅 Validación premios individuales</h3><span class="admin-sec-arrow" id="adminarrow-sec7">▼</span></div><div class="admin-sec-body" id="adminsec-sec7">
       ${premiosValHtml}
-    </div>
-    <div class="admin-section">
-      <h3>⚽ Resultados partidos — Grupos</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec8')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚽ Resultados partidos — Grupos</h3><span class="admin-sec-arrow" id="adminarrow-sec8">▼</span></div><div class="admin-sec-body" id="adminsec-sec8">
       ${GROUP_MATCHES.map(m=>{
         const rm=partidos[m.id]||{};
         return `<div class="match-row">
@@ -2585,23 +2597,19 @@ function renderAdmin(){
         </div>`;
       }).join('')}
       <button class="btn btn-p btn-w" style="margin-top:10px" onclick="guardarGrupos()">💾 Guardar grupos</button>
-    </div>
-    <div class="admin-section">
-      <h3>⚽ Fase eliminatoria</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec9')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚽ Fase eliminatoria</h3><span class="admin-sec-arrow" id="adminarrow-sec9">▼</span></div><div class="admin-sec-body" id="adminsec-sec9">
       ${koAdminHtml}
       <button class="btn btn-p btn-w" style="margin-top:10px" onclick="guardarKO()">💾 Guardar eliminatoria</button>
-    </div>
-    <div class="admin-section">
-      <h3>🎯 Mini-retos</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec10')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎯 Mini-retos</h3><span class="admin-sec-arrow" id="adminarrow-sec10">▼</span></div><div class="admin-sec-body" id="adminsec-sec10">
       ${retosHtml}
-    </div>
-    <div class="admin-section">
-      <h3>💰 Bote</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec11')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">💰 Bote</h3><span class="admin-sec-arrow" id="adminarrow-sec11">▼</span></div><div class="admin-sec-body" id="adminsec-sec11">
       <div class="res-row"><label>Bote manual (€)</label><input type="number" class="fi" id="ar-bote_manual" value="${res.bote_manual??''}" placeholder="Dejar vacío = automático"></div>
       <button class="btn btn-p btn-sm" onclick="guardarBote()">Guardar</button>
-    </div>
-    <div class="admin-section">
-      <h3>⚠️ Penalizaciones</h3>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec12')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚠️ Penalizaciones</h3><span class="admin-sec-arrow" id="adminarrow-sec12">▼</span></div><div class="admin-sec-body" id="adminsec-sec12">
       ${penHtml}
     </div>
     <div class="admin-section danger-zone">
@@ -2613,7 +2621,7 @@ function renderAdmin(){
       </div>
       <div style="font-size:12px;color:var(--t3)">Jugadores: ${Object.keys(players).length}</div>
       ${playersHtml}
-    </div>`;
+    </div></div>`;
 
   // Autofill reto template
   document.getElementById('reto-template')?.addEventListener('change',function(){
@@ -2858,6 +2866,13 @@ window.deleteReto=async function(idx){
   if(!confirm('¿Eliminar reto?')) return;
   const newRetos=retos.filter((_,i)=>i!==idx);
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
+};
+
+window.cerrarRespuestasReto=async function(idx){
+  const newRetos=[...retos];
+  newRetos[idx]={...newRetos[idx], cerrado:!newRetos[idx].cerrado};
+  await setDoc(doc(db,'meta','retos'),{list:newRetos});
+  renderAdmin();
 };
 
 window.guardarGanadoresReto=async function(idx){
