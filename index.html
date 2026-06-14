@@ -40,11 +40,24 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .user-bar strong{color:var(--gold)}
 
 /* TABS */
-.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--brd);overflow-x:auto;scrollbar-width:none}
-.tabs::-webkit-scrollbar{display:none}
-.tab{flex:1;min-width:58px;padding:10px 4px 8px;background:none;border:none;border-bottom:2.5px solid transparent;color:var(--t3);cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.3px;white-space:nowrap;transition:all .15s;position:relative}
-.tab.on{color:var(--gold);border-bottom-color:var(--gold)}
-.tab:hover{color:var(--t1);background:var(--s2)}
+.tabs{display:none}
+/* HAMBURGER MENU */
+.hamburger-btn{background:none;border:none;color:var(--t1);font-size:22px;cursor:pointer;padding:6px 10px;border-radius:8px;transition:background .15s;flex-shrink:0}
+.hamburger-btn:hover{background:rgba(255,255,255,.1)}
+.nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;backdrop-filter:blur(2px)}
+.nav-overlay.open{display:block}
+.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:var(--s1);border-left:1px solid var(--brd);z-index:151;transition:right .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;padding:16px 0}
+.nav-drawer.open{right:0}
+.nav-drawer-header{padding:12px 16px 16px;border-bottom:1px solid var(--brd);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.nav-drawer-header h3{font-size:15px;font-weight:800;color:var(--gold)}
+.nav-close{background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;padding:0 4px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;transition:background .12s;position:relative;font-size:14px;font-weight:600;color:var(--t2);border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--s2);color:var(--t1)}
+.nav-item.active{background:rgba(139,47,201,.15);color:var(--gold);border-left:3px solid var(--gold)}
+.nav-item.active:hover{background:rgba(139,47,201,.2)}
+.nav-item-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
+.nav-badge{background:var(--red);color:#fff;border-radius:10px;font-size:10px;font-weight:800;padding:1px 6px;margin-left:auto}
+/* Active tab glow */
 .tab-badge{position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--red);border-radius:50%;animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.2)}}
 
@@ -301,27 +314,28 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 <div id="user-bar" class="user-bar" style="display:none">
   <div class="user-bar-left">
     <div id="ub-avatar" class="user-avatar-sm"></div>
-    <span>Hola, <strong id="cur-name"></strong></span>
+    <div>
+      <span style="font-size:13px">Hola, <strong id="cur-name"></strong></span>
+      <div style="font-size:11px;color:var(--t3)" id="ub-rank"></div>
+    </div>
   </div>
-  <div style="display:flex;gap:8px">
-    <button class="btn-outline" onclick="go('perfil')">👤 Perfil</button>
+  <div style="display:flex;gap:6px;align-items:center">
     <button class="btn btn-s btn-sm" onclick="logout()">Salir</button>
+    <button class="hamburger-btn" onclick="openNav()" title="Menú">☰</button>
   </div>
 </div>
 
 <!-- TABS -->
-<div id="tabs" class="tabs" style="display:none">
-  <button class="tab on" data-tab="ranking" onclick="go('ranking')">🏅 Ranking</button>
-  <button class="tab" data-tab="pronosticos" onclick="go('pronosticos')">📋 Pronós.<span id="badge-pronos" class="tab-badge" style="display:none"></span></button>
-  <button class="tab" data-tab="bracket" onclick="go('bracket')">🗂️ Bracket<span id="badge-bracket" class="tab-badge" style="display:none"></span></button>
-  <button class="tab" data-tab="partidos" onclick="go('partidos')">⚽ Partidos</button>
-  <button class="tab" data-tab="retos" onclick="go('retos')">🎯 Retos<span id="badge-retos" class="tab-badge" style="display:none"></span></button>
-  <button class="tab" data-tab="stats" onclick="go('stats')">📊 Stats</button>
-  <button class="tab" data-tab="avisos" onclick="go('avisos')">📢 Avisos<span id="badge-avisos" class="tab-badge" style="display:none"></span></button>
-  <button class="tab" data-tab="comparador" onclick="go('comparador')">👥 Comparar</button>
-  <button class="tab" data-tab="normas" onclick="go('normas')">📖 Normas</button>
-  <button class="tab" data-tab="perfil" onclick="go('perfil')">👤 Perfil</button>
-  <button id="admin-tab" class="tab" data-tab="admin" style="display:none" onclick="go('admin')">⚙️ Admin</button>
+<div id="tabs" style="display:none"></div>
+
+<!-- NAV OVERLAY + DRAWER -->
+<div id="nav-overlay" class="nav-overlay" onclick="closeNav()"></div>
+<div id="nav-drawer" class="nav-drawer">
+  <div class="nav-drawer-header">
+    <h3>🏆 Porra Mundial 2026</h3>
+    <button class="nav-close" onclick="closeNav()">✕</button>
+  </div>
+  <div id="nav-items"></div>
 </div>
 
 <!-- LOGIN PAGE -->
@@ -366,6 +380,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 <div id="ranking-page" class="page">
   <div id="countdown-area"></div>
   <div id="partido-del-dia"></div>
+  <div id="aviso-ranking"></div>
   <div id="ranking-banners"></div>
   <div id="bote-bar"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -955,7 +970,7 @@ async function loadAllPronos(){
 function listenMeta(){
   onSnapshot(doc(db,"meta","resultados"),d=>{
     resultados=d.exists()?d.data():{};
-    if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); }
+    if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); }
     if(isActive('pronosticos')) renderPronosticos();
     if(isActive('normas')) renderNormas();
     if(isActive('bracket')) renderBracket();
@@ -1073,9 +1088,14 @@ async function doLogin(name){
   av.textContent=pl.avatar||'⚽';
   const rank=getRank(name);
   av.className='user-avatar-sm'+(rank===1?' av-gold':rank===2?' av-silver':rank===3?' av-bronze':'');
-  document.getElementById('tabs').style.display='flex';
-  document.getElementById('admin-tab').style.display=isAdmin?'flex':'none';
-  go('ranking');
+  const rankEl=document.getElementById('ub-rank');
+  if(rankEl){const medals=['🥇','🥈','🥉'];rankEl.textContent=(medals[rank-1]||rank+'º')+' lugar';}
+  document.getElementById('tabs').style.display='none';
+  document.getElementById('user-bar').style.display='flex';
+  // Restore last tab or go to ranking
+  let startTab='ranking';
+  try{const saved=sessionStorage.getItem('porra_tab');if(saved)startTab=saved;}catch(e){}
+  go(startTab);
   // Log activity
   const p={...pronosticos[name]||{}};
   p._lastLogin=new Date().toISOString();
@@ -1088,7 +1108,23 @@ async function savePronostico(name,data){
 }
 
 // ═══ SCORING ════════════════════════════════════════════
+const _ptsCache={};
+const _ptsCacheKey={};
 function calcPoints(player){
+  // Cache key: hash of relevant data
+  const key=JSON.stringify({
+    p:pronosticos[player]||{},
+    r:resultados,
+    pt:partidos,
+    rt:retos
+  }).length; // Simple length-based cache key
+  if(_ptsCache[player]&&_ptsCacheKey[player]===key) return _ptsCache[player];
+  const result=_calcPointsRaw(player);
+  _ptsCache[player]=result;
+  _ptsCacheKey[player]=key;
+  return result;
+}
+function _calcPointsRaw(player){
   const p=pronosticos[player]||{};
   const res=resultados||{};
   const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,details:[]};
@@ -2049,7 +2085,8 @@ function renderRetos(){
   }
 
   // Share button - use regular string to avoid nested backtick issues
-  const shareBtn='<div style="margin-bottom:12px"><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="width:100%">📸 Generar captura para compartir</button></div>';
+  const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div>';
+  const shareBtn=topBtns;
 
   el.innerHTML=activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
@@ -2158,6 +2195,48 @@ function renderRetos(){
     </div>`;
   }).join('')+shareBtn;
 }
+
+window.mostrarProponerReto=function(){
+  document.getElementById('modal-title').textContent='💡 Proponer un reto';
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:13px;color:var(--t2);margin-bottom:14px">Rellena tu propuesta y el admin la revisará antes de publicarla.</p>
+    <div class="field"><label>Título del reto *</label><input class="fi" type="text" id="prop-titulo" placeholder="ej: ¿Habrá prórroga en la final?"></div>
+    <div class="field"><label>Descripción (opcional)</label><input class="fi" type="text" id="prop-desc" placeholder="Más detalles..."></div>
+    <div class="field-row">
+      <div class="field"><label>Puntos sugeridos</label><input class="fi" type="number" id="prop-pts" value="10" min="1" max="50"></div>
+      <div class="field"><label>Tipo de respuesta</label>
+        <select class="fi" id="prop-tipo">
+          <option value="texto">Texto libre</option>
+          <option value="sino">Sí / No</option>
+          <option value="numero">Número</option>
+          <option value="equipos">Desplegable equipos</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-p btn-w" onclick="enviarProponerReto()">💡 Enviar propuesta</button>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.enviarProponerReto=async function(){
+  const titulo=document.getElementById('prop-titulo')?.value.trim();
+  if(!titulo){alert('Escribe un título');return;}
+  const propuesta={
+    id:'prop_'+Date.now(),
+    titulo,
+    desc:document.getElementById('prop-desc')?.value.trim()||'',
+    pts:Number(document.getElementById('prop-pts')?.value)||10,
+    tipo:document.getElementById('prop-tipo')?.value||'texto',
+    autor:currentUser,
+    fecha:new Date().toISOString(),
+    estado:'pendiente'
+  };
+  const res={...resultados};
+  if(!res.propuestasRetos) res.propuestasRetos=[];
+  res.propuestasRetos.push(propuesta);
+  await setDoc(doc(db,'meta','resultados'),res);
+  closeModal('detail-modal');
+  showToast('✅ Propuesta enviada al admin');
+};
 
 window.mostrarSelectorCaptura=function(){
   document.getElementById('modal-title').textContent='📸 Captura de retos';
@@ -2735,6 +2814,30 @@ function renderAdmin(){
       <div class="field"><label>Fecha límite</label><input class="fi" type="datetime-local" id="reto-deadline"></div>
       <button class="btn btn-p btn-sm" onclick="crearReto()">Lanzar reto</button>
     </div>
+
+    <!-- Propuestas de jugadores -->
+    ${(()=>{
+      const props=(resultados.propuestasRetos||[]).filter(p=>p.estado==='pendiente');
+      if(!props.length) return '';
+      return `<div style="margin-top:16px;border-top:1px solid var(--brd);padding-top:14px">
+        <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px">📬 Propuestas de jugadores (${props.length})</div>
+        ${props.map((p,i)=>`<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid var(--purple)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-size:13px;font-weight:700">${p.titulo}</div>
+              ${p.desc?`<div style="font-size:11px;color:var(--t2)">${p.desc}</div>`:''}
+              <div style="font-size:10px;color:var(--t3);margin-top:4px">Por ${p.autor} · +${p.pts} pts · ${p.tipo}</div>
+            </div>
+            <div style="display:flex;gap:4px">
+              <button class="btn-xs btn-g" onclick="publicarPropuesta(${i})">✓ Publicar</button>
+              <button class="btn-xs btn-s" onclick="editarPropuesta(${i})">✏️</button>
+              <button class="btn-xs btn-danger" onclick="rechazarPropuesta(${i})">✗</button>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    })()}
+    </div>
     ${retos.map((r,i)=>`<div class="reto-card">
       <div style="display:flex;justify-content:space-between">
         <h4>${r.titulo} <span class="badge badge-gold">+${r.pts} pts</span></h4>
@@ -3059,6 +3162,64 @@ window.guardarBote=async function(){
   if(val) res.bote_manual=Number(val); else delete res.bote_manual;
   await setDoc(doc(db,'meta','resultados'),res);
   alert('✅ Bote guardado');
+};
+
+window.publicarPropuesta=async function(idx){
+  const props=[...(resultados.propuestasRetos||[])];
+  const p=props[idx];
+  const newReto={id:'reto_'+Date.now(),titulo:p.titulo,desc:p.desc,pts:p.pts,tipo:p.tipo,activo:true,ganadores:{},opciones:[]};
+  const newRetos=[...retos,newReto];
+  await setDoc(doc(db,'meta','retos'),{list:newRetos});
+  props[idx].estado='publicado';
+  const res={...resultados,propuestasRetos:props};
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('✅ Reto publicado');
+  renderAdmin();
+};
+
+window.rechazarPropuesta=async function(idx){
+  const props=[...(resultados.propuestasRetos||[])];
+  props[idx].estado='rechazado';
+  const res={...resultados,propuestasRetos:props};
+  await setDoc(doc(db,'meta','resultados'),res);
+  renderAdmin();
+};
+
+window.editarPropuesta=function(idx){
+  const props=(resultados.propuestasRetos||[]);
+  const p=props[idx];
+  document.getElementById('modal-title').textContent='✏️ Editar propuesta';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field"><label>Título</label><input class="fi" type="text" id="ep-titulo" value="${esc(p.titulo)}"></div>
+    <div class="field"><label>Descripción</label><input class="fi" type="text" id="ep-desc" value="${esc(p.desc||'')}"></div>
+    <div class="field-row">
+      <div class="field"><label>Puntos</label><input class="fi" type="number" id="ep-pts" value="${p.pts}"></div>
+      <div class="field"><label>Tipo</label>
+        <select class="fi" id="ep-tipo">
+          <option value="texto" ${p.tipo==='texto'?'selected':''}>Texto libre</option>
+          <option value="sino" ${p.tipo==='sino'?'selected':''}>Sí / No</option>
+          <option value="numero" ${p.tipo==='numero'?'selected':''}>Número</option>
+          <option value="equipos" ${p.tipo==='equipos'?'selected':''}>Equipos</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn btn-p" onclick="guardarEdicionPropuesta(${idx})">💾 Guardar y publicar</button>
+      <button class="btn btn-s" onclick="closeModal('detail-modal')">Cancelar</button>
+    </div>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.guardarEdicionPropuesta=async function(idx){
+  const props=[...(resultados.propuestasRetos||[])];
+  props[idx]={...props[idx],
+    titulo:document.getElementById('ep-titulo').value.trim(),
+    desc:document.getElementById('ep-desc').value.trim(),
+    pts:Number(document.getElementById('ep-pts').value),
+    tipo:document.getElementById('ep-tipo').value,
+  };
+  closeModal('detail-modal');
+  await publicarPropuesta(idx);
 };
 
 window.crearReto=async function(){
@@ -3602,6 +3763,22 @@ window.setCompPhase=function(phase){
   renderComparador();
 };
 
+// ═══ AVISO EN RANKING ═══════════════════════════════════════════════
+function renderAvisoRanking(){
+  const el=document.getElementById('aviso-ranking');
+  if(!el) return;
+  const avisos=resultados.avisos||[];
+  if(!avisos.length){el.innerHTML='';return;}
+  const last=avisos[avisos.length-1];
+  el.innerHTML=`<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start">
+    <span style="font-size:18px;flex-shrink:0">📢</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:2px">${fmtDate(last.fecha)}</div>
+      <div style="font-size:13px;color:var(--t1);font-weight:600">${last.msg}</div>
+    </div>
+  </div>`;
+}
+
 // ═══ PARTIDO DEL DÍA ════════════════════════════════════════════════════
 function renderPartidoDelDia(){
   const el=document.getElementById('partido-del-dia');
@@ -3643,12 +3820,55 @@ function renderPartidoDelDia(){
 }
 
 // ═══ NAV ════════════════════════════════════════════════
+const NAV_TABS = [
+  {id:'ranking',    icon:'🏅', label:'Ranking'},
+  {id:'pronosticos',icon:'📋', label:'Pronósticos'},
+  {id:'bracket',    icon:'🗂️', label:'Bracket'},
+  {id:'partidos',   icon:'⚽', label:'Partidos'},
+  {id:'retos',      icon:'🎯', label:'Retos'},
+  {id:'stats',      icon:'📊', label:'Stats'},
+  {id:'comparador', icon:'👥', label:'Comparar'},
+  {id:'normas',     icon:'📖', label:'Normas'},
+  {id:'perfil',     icon:'👤', label:'Perfil'},
+  {id:'admin',      icon:'⚙️', label:'Admin', adminOnly:true},
+];
+
+function renderNavDrawer(currentTab){
+  const el=document.getElementById('nav-items');
+  if(!el) return;
+  const p=pronosticos[currentUser]||{};
+  const res=resultados||{};
+  const badges={
+    retos: retos.filter(r=>r.activo&&!r.cerrado&&!(p.retos?.[r.id])).length,
+    pronosticos: (!p._locked&&pronosCount(currentUser).pct<100)?1:0,
+    bracket: !res.bracket_locked?ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length:0,
+  };
+  el.innerHTML=NAV_TABS.filter(t=>!t.adminOnly||isAdmin).map(t=>`
+    <button class="nav-item ${t.id===currentTab?'active':''}" onclick="go('${t.id}');closeNav()">
+      <span class="nav-item-icon">${t.icon}</span>
+      <span>${t.label}</span>
+      ${badges[t.id]?`<span class="nav-badge">${badges[t.id]}</span>`:''}
+    </button>`).join('');
+}
+
+window.openNav=function(){
+  document.getElementById('nav-overlay').classList.add('open');
+  document.getElementById('nav-drawer').classList.add('open');
+  renderNavDrawer(window._currentTab||'ranking');
+};
+window.closeNav=function(){
+  document.getElementById('nav-overlay').classList.remove('open');
+  document.getElementById('nav-drawer').classList.remove('open');
+};
+
 window.go=function(tab){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
+  window._currentTab=tab;
+  // Save to sessionStorage so refresh restores position
+  try{sessionStorage.setItem('porra_tab',tab);}catch(e){}
   ['ranking','pronosticos','bracket','partidos','retos','stats','avisos','normas','perfil','comparador','admin'].forEach(p=>{
     document.getElementById(p+'-page').classList.toggle('on',p===tab);
   });
-  if(tab==='ranking'){ renderRanking(); checkRondaBanners(); renderPartidoDelDia(); updateBadges(); }
+  if(tab==='ranking'){ renderRanking(); checkRondaBanners(); renderPartidoDelDia(); renderAvisoRanking(); updateBadges(); }
   else if(tab==='pronosticos') renderPronosticos();
   else if(tab==='bracket') renderBracket();
   else if(tab==='partidos') renderPartidos();
