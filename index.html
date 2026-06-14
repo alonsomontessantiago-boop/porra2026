@@ -4197,87 +4197,113 @@ function renderEvolucion(){
   if(!el) return;
   const hist=resultados.historialRanking||[];
   if(hist.length<2){
-    el.innerHTML=`<div style="background:var(--s1);border:1px solid var(--brd);border-radius:12px;padding:14px;margin-top:4px">
-      <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:6px">📈 Evolución del ranking</div>
-      <div style="font-size:12px;color:var(--t3)">Se actualizará automáticamente cuando el admin guarde los próximos resultados.</div>
-    </div>`;
+    el.innerHTML=`<div style="background:var(--s1);border:1px solid var(--brd);border-radius:12px;padding:14px;margin-top:4px;color:var(--t3);font-size:13px;text-align:center">
+      📈 El gráfico de evolución aparecerá cuando haya más de un snapshot de puntos</div>`;
     return;
   }
   const names=Object.keys(players);
   const total=names.length;
-  const colors=['#8b2fc9','#e8621a','#2da653','#e8a820','#3a7bd5','#f87171','#4ade80','#fb923c','#a78bfa','#34d399','#f472b6','#60a5fa','#fbbf24'];
-  const W=Math.min(el.offsetWidth||340, 340);
-  const H=160;
-  const PAD=24;
-  const xs=hist.map((_,i)=>PAD+(i/(hist.length-1||1))*(W-PAD*2));
+  const W=el.offsetWidth-24||340;
+  const PAD_L=18,PAD_R=96,PAD_T=16,PAD_B=22;
+  const W2=W-PAD_L-PAD_R;
+  const ROW_H=22;
+  const H2=ROW_H*(total-1);
+  const H=H2+PAD_T+PAD_B;
+  const steps=hist.length;
+  const colors=['#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9','#4ade80','#38bdf8','#fbbf24','#c084fc','#86efac','#fca5a5'];
 
-  const lines=names.map((n,ni)=>{
-    const pts=hist.map((h,i)=>({
-      x:xs[i],
-      y:PAD+(((h.ranking[n]||total)-1)/(total-1||1))*(H-PAD*2)
-    }));
-    const d='M'+pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join('L');
+  function getRankAt(snap,name){
+    // Snapshot stores ranking positions directly as {name: position}
+    if(snap.ranking?.[name]) return snap.ranking[name];
+    // Fallback: derive from puntos if available
+    if(snap.puntos){
+      const pts={};
+      names.forEach(n=>{pts[n]=snap.puntos[n]||0;});
+      return [...names].sort((a,b)=>pts[b]-pts[a]).indexOf(name)+1;
+    }
+    return names.indexOf(name)+1;
+  }
+  function xPos(i){return PAD_L+(steps<=1?W2/2:i/(steps-1)*W2);}
+  function yPos(rank){return PAD_T+(rank-1)/(total-1||1)*H2;}
+
+  // BG zones
+  let bg='';
+  bg+=`<rect x="${PAD_L}" y="${PAD_T}" width="${W2}" height="${yPos(3)-PAD_T+ROW_H/2}" fill="rgba(251,191,36,.07)" rx="3"/>`;
+  bg+=`<rect x="${PAD_L}" y="${yPos(total-2)-ROW_H/2}" width="${W2}" height="${H2-(yPos(total-2)-PAD_T)+ROW_H}" fill="rgba(248,113,113,.07)" rx="3"/>`;
+
+  // Position guide lines
+  let guides='';
+  for(let pos=1;pos<=total;pos++){
+    const y=yPos(pos);
+    guides+=`<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+W2}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+    guides+=`<text x="${PAD_L-3}" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)" text-anchor="end">${pos}º</text>`;
+  }
+
+  // X axis date labels — deduplicated
+  let xLabels='';
+  const seenDates=new Set();
+  hist.forEach((snap,i)=>{
+    const d=new Date(snap.fecha||snap.timestamp||Date.now());
+    const label=d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+    if(!seenDates.has(label)){
+      seenDates.add(label);
+      xLabels+=`<text x="${xPos(i)}" y="${H-5}" font-size="8" fill="rgba(255,255,255,.35)" text-anchor="middle">${label}</text>`;
+    }
+  });
+
+  // Per-player lines + labels + dots
+  let lines='',dots='',labels='';
+  const uid='ev'+Date.now();
+
+  names.forEach((n,ni)=>{
+    const col=colors[ni%colors.length];
+    const pts=hist.map((snap,i)=>({x:xPos(i),y:yPos(getRankAt(snap,n)),rank:getRankAt(snap,n)}));
     const last=pts[pts.length-1];
-    const color=colors[ni%colors.length];
-    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" opacity=".9"/>
-      <circle cx="${last.x}" cy="${last.y}" r="4" fill="${color}"/>
-      <text x="${Math.min(last.x+6, W-30)}" y="${last.y+4}" font-size="10" fill="${color}" font-weight="700">${players[n]?.avatar||''}</text>`;
+
+    // Path with animation
+    let d='';
+    pts.forEach((p,i)=>{d+=i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`;});
+    const pid=uid+'p'+ni;
+    lines+=`<path id="${pid}" d="${d}" stroke="${col}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    // Dot at end
+    dots+=`<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="${col}" stroke="rgba(20,10,40,.8)" stroke-width="1.2"/>`;
+
+    // Arrow ↑↓
+    let arrow='',arrowCol='rgba(255,255,255,.5)';
+    if(pts.length>=2){
+      const prev=pts[pts.length-2];
+      if(last.rank<prev.rank){arrow='↑';arrowCol='#4ade80';}
+      else if(last.rank>prev.rank){arrow='↓';arrowCol='#f87171';}
+    }
+
+    // Label: avatar + name + arrow
+    const av=players[n]?.avatar||'⚽';
+    const lx=(last.x+9).toFixed(1),ly=last.y.toFixed(1);
+    labels+=`<text x="${lx}" y="${(parseFloat(ly)+4).toFixed(1)}" font-size="9.5" fill="${col}" font-weight="600">${av} ${n}${arrow?` <tspan fill="${arrowCol}">${arrow}</tspan>`:''}</text>`;
+  });
+
+  // Animate: use CSS stroke-dasharray trick
+  const animCSS=names.map((_,ni)=>{
+    const pid=uid+'p'+ni;
+    const dur=(0.7+ni*0.05).toFixed(2);
+    return `@keyframes draw${pid}{to{stroke-dashoffset:0}}#${pid}{stroke-dasharray:3000;stroke-dashoffset:3000;animation:draw${pid} ${dur}s cubic-bezier(.4,0,.2,1) forwards;}`;
   }).join('');
 
-  const yLabels=[1,Math.ceil(total/2),total].map(pos=>{
-    const y=PAD+(((pos)-1)/(total-1||1))*(H-PAD*2);
-    return `<line x1="${PAD-4}" y1="${y}" x2="${W}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
-      <text x="2" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)">${pos}º</text>`;
-  }).join('');
-
-  const svgId='evol-svg-'+Date.now();
-  el.innerHTML=`<div style="background:var(--s1);border:1px solid var(--brd);border-radius:12px;padding:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:800;color:var(--gold)">📈 Evolución del ranking</div>
-      <button class="btn btn-s btn-xs" onclick="exportarGrafico('${svgId}')">📸</button>
-    </div>
-    <svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">
-      ${yLabels}${lines}
-    </svg>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-      ${names.map((n,ni)=>`<span style="font-size:10px;color:${colors[ni%colors.length]};display:flex;align-items:center;gap:3px">
-        <span style="font-size:12px">${players[n]?.avatar||'⚽'}</span>${n}
-      </span>`).join('')}
-    </div>
-  </div>`;
+  const svgId=uid+'svg';
+  el.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--brd);border-radius:12px;padding:12px;margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:800;color:var(--gold)">📈 Evolución del ranking</div>
+        <button class="btn btn-s btn-xs" onclick="exportarGrafico('${svgId}')">📸</button>
+      </div>
+      <style>${animCSS}</style>
+      <svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">
+        ${bg}${guides}${xLabels}${lines}${dots}${labels}
+      </svg>
+    </div>`;
 }
 
-window.exportarGrafico=function(svgId){
-  const svg=document.getElementById(svgId);
-  if(!svg) return;
-  const canvas=document.createElement('canvas');
-  canvas.width=svg.getBoundingClientRect().width*2||680;
-  canvas.height=svg.getBoundingClientRect().height*2||320;
-  const ctx=canvas.getContext('2d');
-  // Dark background
-  ctx.fillStyle='#1c0030';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  // Title
-  ctx.fillStyle='#e8a820';
-  ctx.font='bold 18px system-ui';
-  ctx.textAlign='center';
-  ctx.fillText('📈 Evolución del ranking — Porra Mundial 2026',canvas.width/2,26);
-  const data=new XMLSerializer().serializeToString(svg);
-  const img=new Image();
-  img.onload=function(){
-    ctx.drawImage(img,20,40,canvas.width-40,canvas.height-60);
-    const imgData=canvas.toDataURL('image/png');
-    document.getElementById('modal-title').textContent='📈 Exportar gráfico';
-    document.getElementById('modal-body').innerHTML=`
-      <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Mantén pulsada para guardar o compartir.</p>
-      <img src="${imgData}" style="width:100%;border-radius:8px;display:block;margin-bottom:10px">
-      <button class="btn btn-p btn-w" onclick="descargarCaptura('${imgData}')">💾 Descargar PNG</button>`;
-    document.getElementById('detail-modal').style.display='flex';
-  };
-  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(data);
-};
-
-// ═══ AVISO EN RANKING ═══════════════════════════════════════════════
 function renderAvisoRanking(){
   const el=document.getElementById('aviso-ranking');
   if(!el) return;
