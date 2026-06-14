@@ -1375,7 +1375,12 @@ function renderLogin(){
   const el=document.getElementById('player-list');
   const names=Object.keys(players);
   if(!names.length){ el.innerHTML='<div style="color:var(--t3);font-size:13px;text-align:center">Sé el primero en registrarte 👇</div>'; return; }
-  const sorted=names.map(n=>{const pts=pronosticos[n]?calcPoints(n).total:0;return{n,pts};}).sort((a,b)=>b.pts-a.pts);
+  // Use cached points if available for fast render, then recalc
+  const cache=resultados.puntosCache||{};
+  const sorted=names.map(n=>{
+    const pts=cache[n]!=null?cache[n]:(pronosticos[n]?calcPoints(n).total:0);
+    return{n,pts};
+  }).sort((a,b)=>b.pts-a.pts);
   const crowns=['🥇','🥈','🥉'];
   el.innerHTML=`<div class="login-circles">${sorted.map((x,i)=>{
     const pl=players[x.n]||{};
@@ -1528,10 +1533,10 @@ window.verJugador=function(name){
   function acord(icon,title,bodyHtml,startOpen=false){
     const id='acord_'+Math.random().toString(36).substr(2,6);
     return `<div class="acord-item">
-      <div class="acord-hdr" onclick="this.nextSibling.classList.toggle('open');this.querySelector('.acord-arr').textContent=this.nextSibling.classList.contains('open')?'▼':'►">
-        <span>${icon} ${title}</span><span class="acord-arr">${startOpen?'▼':'►'}</span>
+      <div class="acord-hdr" onclick="const b=document.getElementById('ab_${id}');const a=document.getElementById('aa_${id}');b.classList.toggle('open');a.textContent=b.classList.contains('open')?'▼':'►'">
+        <span>${icon} ${title}</span><span class="acord-arr" id="aa_${id}">${startOpen?'▼':'►'}</span>
       </div>
-      <div class="acord-body${startOpen?' open':''}">${bodyHtml}</div>
+      <div class="acord-body${startOpen?' open':''}" id="ab_${id}">${bodyHtml}</div>
     </div>`;
   }
 
@@ -3230,13 +3235,19 @@ async function guardarHistorialRanking(){
   try{
     const names=Object.keys(players);
     const ranking={};
-    names.forEach(n=>{ranking[n]=getRank(n);});
+    const puntosCache={};
+    names.forEach(n=>{
+      ranking[n]=getRank(n);
+      puntosCache[n]=calcPoints(n).total;
+    });
     const res={...resultados};
     if(!res.historialRanking) res.historialRanking=[];
     const jugados=Object.keys(partidos).filter(k=>k.startsWith('G_')).length;
     res.historialRanking.push({fecha:new Date().toISOString(),partidos:jugados,ranking});
-    // Keep last 50 snapshots
     if(res.historialRanking.length>50) res.historialRanking=res.historialRanking.slice(-50);
+    // Save points cache for fast login
+    res.puntosCache=puntosCache;
+    res.puntosCacheDate=new Date().toISOString();
     await setDoc(doc(db,'meta','resultados'),res);
   }catch(e){console.log('Historial error:',e);}
 }
