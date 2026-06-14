@@ -2839,12 +2839,14 @@ function renderAdmin(){
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec8')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚽ Resultados partidos — Grupos</h3><span class="admin-sec-arrow" id="adminarrow-sec8">▼</span></div><div class="admin-sec-body" id="adminsec-sec8">
       ${GROUP_MATCHES.map(m=>{
         const rm=partidos[m.id]||{};
-        return `<div class="match-row">
+        const hasResult=rm.gl!=null;
+        return `<div class="match-row" style="background:${hasResult?'rgba(45,166,83,.06)':'transparent'};border-radius:6px;padding:4px">
           <span class="match-label" style="font-size:11px">${m.local} vs ${m.visit} <span class="badge badge-info" style="font-size:9px">${m.grupo}</span></span>
-          <div class="score-pair">
+          <div class="score-pair" style="align-items:center;gap:4px">
             <input type="number" min="0" max="20" class="si" id="gm-${m.id}-gl" value="${rm.gl??''}" placeholder="?">
             <span class="score-dash">-</span>
             <input type="number" min="0" max="20" class="si" id="gm-${m.id}-gv" value="${rm.gv??''}" placeholder="?">
+            ${hasResult?`<button class="btn-xs btn-danger" onclick="borrarResultado('${m.id}')" title="Borrar resultado">✕</button>`:''}
           </div>
         </div>`;
       }).join('')}
@@ -2986,6 +2988,14 @@ window.guardarValidacion=async function(key){
   });
   await setDoc(doc(db,'meta','resultados'),res);
   alert('✅ Validación guardada');
+};
+
+window.borrarResultado=async function(matchId){
+  if(!confirm('¿Borrar el resultado de este partido?')) return;
+  const p={...partidos};
+  delete p[matchId];
+  await setDoc(doc(db,'meta','partidos'),p);
+  alert('✅ Resultado borrado');
 };
 
 window.guardarGrupos=async function(){
