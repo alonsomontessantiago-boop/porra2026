@@ -2163,17 +2163,21 @@ window.mostrarSelectorCaptura=function(){
   document.getElementById('modal-title').textContent='📸 Captura de retos';
   const retosActivos=retos.filter(r=>r.activo);
   document.getElementById('modal-body').innerHTML=`
-    <p style="font-size:13px;color:var(--t2);margin-bottom:12px">Selecciona los retos que quieres incluir en la captura:</p>
+    <button class="btn btn-p btn-w" style="margin-bottom:12px" onclick="generarCapturaRetos()">📸 Generar imagen</button>
+    <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Selecciona los retos a incluir:</p>
     <div style="margin-bottom:14px">
-      ${retosActivos.map((r,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:8px;margin-bottom:6px;cursor:pointer">
-        <input type="checkbox" id="cap-reto-${i}" checked style="width:18px;height:18px;accent-color:var(--purple)">
-        <div>
-          <div style="font-size:13px;font-weight:700">${r.titulo}</div>
-          <div style="font-size:11px;color:${r.cerrado?'var(--t3)':'#4ade80'}">${r.cerrado?'🔒 Cerrado':'● Abierto'} · +${r.pts} pts</div>
-        </div>
-      </label>`).join('')}
-    </div>
-    <button class="btn btn-p btn-w" onclick="generarCapturaRetos()">📸 Generar imagen</button>`;
+      ${retosActivos.map((r,i)=>{
+        const cerrado=r.cerrado||new Date()>new Date(r.deadline);
+        const checked=!cerrado; // pre-select open retos only
+        return `<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:8px;margin-bottom:6px;cursor:pointer">
+          <input type="checkbox" id="cap-reto-${i}" ${checked?'checked':''} style="width:18px;height:18px;accent-color:var(--purple)">
+          <div>
+            <div style="font-size:13px;font-weight:700">${r.titulo}</div>
+            <div style="font-size:11px;color:${cerrado?'var(--t3)':'#4ade80'}">${cerrado?'🔒 Cerrado':'● Abierto'} · +${r.pts} pts</div>
+          </div>
+        </label>`;
+      }).join('')}
+    </div>`;
   document.getElementById('detail-modal').style.display='flex';
 };
 
