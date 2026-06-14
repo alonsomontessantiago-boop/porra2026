@@ -2991,11 +2991,23 @@ window.guardarValidacion=async function(key){
 };
 
 window.borrarResultado=async function(matchId){
-  if(!confirm('¿Borrar el resultado de este partido?')) return;
+  // Use custom modal instead of confirm() which breaks on iOS Safari
+  document.getElementById('modal-title').textContent='🗑️ Borrar resultado';
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:14px;color:var(--t2);margin-bottom:16px">¿Seguro que quieres borrar este resultado? Los puntos se recalcularán automáticamente.</p>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-danger" style="flex:1;padding:12px" onclick="confirmarBorrar('${matchId}')">🗑️ Borrar</button>
+      <button class="btn btn-s" style="flex:1;padding:12px" onclick="closeModal('detail-modal')">Cancelar</button>
+    </div>`;
+  document.getElementById('detail-modal').style.display='flex';
+};
+
+window.confirmarBorrar=async function(matchId){
+  closeModal('detail-modal');
   const p={...partidos};
   delete p[matchId];
   await setDoc(doc(db,'meta','partidos'),p);
-  alert('✅ Resultado borrado');
+  showToast('✅ Resultado borrado');
 };
 
 window.guardarGrupos=async function(){
