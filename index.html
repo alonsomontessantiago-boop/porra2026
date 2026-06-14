@@ -3007,7 +3007,11 @@ window.confirmarBorrar=async function(matchId){
   const p={...partidos};
   delete p[matchId];
   await setDoc(doc(db,'meta','partidos'),p);
-  showToast('✅ Resultado borrado');
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0d2e0d;color:#4ade80;border:1px solid #2da653;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;z-index:9999';
+  t.textContent='✅ Resultado borrado';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
 };
 
 window.guardarGrupos=async function(){
@@ -3825,6 +3829,8 @@ const _fns = {
   cerrarRegistro: window.cerrarRegistro, cerrarPronos: window.cerrarPronos,
   exportarDatos: window.exportarDatos, resetPw: window.resetPw,
   eliminarJugador: window.eliminarJugador,
+  confirmarBorrar: window.confirmarBorrar, borrarResultado: window.borrarResultado,
+  marcarResuelto: window.marcarResuelto, cerrarRespuestasReto: window.cerrarRespuestasReto,
 };
 window._moduleReady(_fns);
 })().catch(e => { console.error('Firebase init error:', e); const el=document.getElementById('player-list'); if(el) el.innerHTML='<div style="color:#f87171;font-size:13px">Error de conexión. Recarga la página.</div>'; });
