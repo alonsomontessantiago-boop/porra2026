@@ -2707,34 +2707,105 @@ function renderStats(){
       ${(()=>{
         const hist=resultados.historialRanking||[];
         if(hist.length<2) return '<div style="color:var(--t3);font-size:13px">Se generará automáticamente conforme el admin meta resultados.</div>';
-        const total=Object.keys(players).length;
-        const W=document.getElementById('stats-content')?.offsetWidth-40||300;
-        const H=140;
-        const PAD=20;
-        const colors=['#8b2fc9','#e8621a','#2da653','#e8a820','#3a7bd5','#f87171','#4ade80','#fb923c','#a78bfa','#34d399','#f472b6','#60a5fa'];
-        // X: partidos played, Y: position (inverted - lower = better)
-        const xs=hist.map((_,i)=>PAD+(i/(hist.length-1||1))*(W-PAD*2));
         const names=Object.keys(players);
-        const lines=names.map((n,ni)=>{
-          const pts=hist.map(h=>({x:xs[hist.indexOf(h)],y:PAD+(((h.ranking[n]||total)-1)/(total-1||1))*(H-PAD*2)}));
-          const d='M'+pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join('L');
-          const lastPt=pts[pts.length-1];
-          return `<path d="${d}" fill="none" stroke="${colors[ni%colors.length]}" stroke-width="2" opacity=".8"/>
-            <text x="${lastPt.x+3}" y="${lastPt.y+4}" font-size="9" fill="${colors[ni%colors.length]}">${players[n]?.avatar||''}</text>`;
+        const total=names.length;
+        const W=document.getElementById('stats-content')?.offsetWidth-40||300;
+        const PAD_L=8,PAD_R=90,PAD_T=18,PAD_B=24;
+        const W2=W-PAD_L-PAD_R, H2=22*total;
+        const H=H2+PAD_T+PAD_B;
+        const steps=hist.length;
+        const colors=['#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9','#4ade80','#38bdf8','#fbbf24','#c084fc','#86efac','#fca5a5'];
+        
+        // Get rank of each player at each snapshot
+        function getRankAt(snapshot, name){
+          const pts={};
+          names.forEach(n=>{pts[n]=snapshot.puntos?.[n]||0;});
+          const sorted=[...names].sort((a,b)=>pts[b]-pts[a]);
+          return sorted.indexOf(name)+1;
+        }
+        
+        // X positions for each snapshot
+        function xPos(i){ return PAD_L + (steps<=1?W2/2:i/(steps-1)*W2); }
+        // Y position for rank
+        function yPos(rank){ return PAD_T+(rank-1)/(total-1||1)*H2; }
+        
+        // Background zones
+        let bgZones='';
+        // Gold zone top 3
+        bgZones+=`<rect x="${PAD_L}" y="${PAD_T}" width="${W2}" height="${yPos(3)-PAD_T+11}" fill="rgba(251,191,36,.06)" rx="4"/>`;
+        // Red zone bottom 3
+        bgZones+=`<rect x="${PAD_L}" y="${yPos(total-2)-11}" width="${W2}" height="${H2-(yPos(total-2)-PAD_T)+22}" fill="rgba(248,113,113,.06)" rx="4"/>`;
+        
+        // Horizontal guide lines for each position
+        let guides='';
+        for(let pos=1;pos<=total;pos++){
+          const y=yPos(pos);
+          guides+=`<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+W2}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+          // Position label on left
+          guides+=`<text x="${PAD_L-2}" y="${y+4}" font-size="8" fill="rgba(255,255,255,.25)" text-anchor="end">${pos}º</text>`;
+        }
+        
+        // X axis date labels
+        let xLabels='';
+        hist.forEach((snap,i)=>{
+          const d=new Date(snap.fecha||snap.timestamp||Date.now());
+          const label=d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+          xLabels+=`<text x="${xPos(i)}" y="${H-6}" font-size="8" fill="rgba(255,255,255,.35)" text-anchor="middle">${label}</text>`;
+        });
+        
+        // Lines per player — each gets an id for animation
+        let lines='', labels='', dots='';
+        names.forEach((n,ni)=>{
+          const col=colors[ni%colors.length];
+          const pts=[];
+          hist.forEach((snap,i)=>{
+            const rank=getRankAt(snap,n);
+            pts.push({x:xPos(i),y:yPos(rank),rank});
+          });
+          
+          // Build path
+          let d='';
+          pts.forEach((p,i)=>{ d+=i===0?`M${p.x},${p.y}`:`L${p.x},${p.y}`; });
+          const pathId='ev-path-'+ni;
+          lines+=`<path id="${pathId}" d="${d}" stroke="${col}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+            <animate attributeName="stroke-dashoffset" from="2000" to="0" dur="${0.8+ni*0.05}s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1"/>
+          </path>`;
+          
+          // End point dot
+          const last=pts[pts.length-1];
+          dots+=`<circle cx="${last.x}" cy="${last.y}" r="3.5" fill="${col}" stroke="rgba(20,10,40,.8)" stroke-width="1.5">
+            <animate attributeName="r" from="0" to="3.5" dur="${0.8+ni*0.05}s" fill="freeze"/>
+          </circle>`;
+          
+          // Arrow direction ↑↓
+          let arrow='';
+          if(pts.length>=2){
+            const prev=pts[pts.length-2];
+            if(last.rank<prev.rank) arrow='↑';
+            else if(last.rank>prev.rank) arrow='↓';
+          }
+          
+          // Label at end: avatar + name + arrow
+          const av=players[n]?.avatar||'⚽';
+          const arrowColor=arrow==='↑'?'#4ade80':arrow==='↓'?'#f87171':'rgba(255,255,255,.6)';
+          labels+=`<text x="${last.x+8}" y="${last.y+4}" font-size="9.5" fill="${col}" font-weight="600">${av} ${n}</text>`;
+          if(arrow) labels+=`<text x="${last.x+8+n.length*5.5+18}" y="${last.y+4}" font-size="9" fill="${arrowColor}">${arrow}</text>`;
+        });
+        
+        // Animate path lengths
+        const animStyles=names.map((_,ni)=>{
+          const pathId='ev-path-'+ni;
+          return `#${pathId}{ stroke-dasharray:2000; }`;
         }).join('');
-        // Y axis labels
-        const yLabels=[1,Math.ceil(total/2),total].map(pos=>{
-          const y=PAD+(((pos)-1)/(total-1||1))*(H-PAD*2);
-          return `<text x="2" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)">${pos}º</text>`;
-        }).join('');
-        return `<div style="overflow-x:auto"><svg width="${W}" height="${H}" style="display:block">
-          ${yLabels}
-          ${lines}
-          ${hist.map((_,i)=>i>0?`<text x="${xs[i]}" y="${H-2}" font-size="7" fill="rgba(255,255,255,.2)" text-anchor="middle">${i}</text>`:'').join('')}
-        </svg></div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-          ${names.map((n,ni)=>`<span style="font-size:10px;color:${colors[ni%colors.length]}">${players[n]?.avatar||'⚽'} ${n}</span>`).join('')}
-        </div>`;
+        
+        const svgId='evol-svg-'+Date.now();
+        return `<style>${animStyles}</style>
+          <svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">
+            ${bgZones}${guides}${xLabels}${lines}${dots}${labels}
+          </svg>
+          <div style="margin-top:8px;display:flex;justify-content:flex-end">
+            <button class="btn btn-s btn-xs" onclick="exportarGrafico('${svgId}')">📸 Exportar</button>
+          </div>`;
       })()}
     </div>
 
@@ -4338,14 +4409,15 @@ window.generarCaptura=function(){
   const medals=['🥇','🥈','🥉'];
   const now=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Madrid'});
   
-  // Create canvas
   const canvas=document.createElement('canvas');
-  const W=520, ROW=52, PAD=20;
+  const W=520, PAD=20;
+  const PODIO_H=130; // height of podium section
+  const ROW=44;
   canvas.width=W;
-  canvas.height=PAD*2+60+ranked.length*ROW+40;
+  canvas.height=PAD*2+60+PODIO_H+20+(ranked.length)*ROW+30;
   const ctx=canvas.getContext('2d');
   
-  // Background
+  // Background gradient
   const grad=ctx.createLinearGradient(0,0,W,canvas.height);
   grad.addColorStop(0,'#3d006b');
   grad.addColorStop(0.5,'#8b1a1a');
@@ -4357,60 +4429,123 @@ window.generarCaptura=function(){
   ctx.fillStyle='#e8a820';
   ctx.font='bold 22px system-ui';
   ctx.textAlign='center';
-  ctx.fillText('🏆 Porra Mundial 2026',W/2,PAD+28);
-  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.fillText('🏆 Porra Mundial 2026',W/2,PAD+26);
+  ctx.fillStyle='rgba(255,255,255,.5)';
   ctx.font='13px system-ui';
-  ctx.fillText(now,W/2,PAD+48);
+  ctx.fillText(now,W/2,PAD+46);
   
-  // Rows
-  ranked.forEach(({n,p},i)=>{
-    const y=PAD+60+i*ROW;
-    const bg=i===0?'rgba(255,215,0,0.15)':i===1?'rgba(192,192,192,0.1)':i===2?'rgba(205,127,50,0.1)':'rgba(255,255,255,0.04)';
+  // ── PODIO TOP 3 ──────────────────────────────────────
+  const podioY=PAD+60;
+  const podioW=W-PAD*2;
+  const slotW=podioW/3;
+  const podioOrder=[1,0,2]; // 2nd left, 1st center, 3rd right
+  const podioHeights=[80,100,65];
+  const podioColors=['#c0c0c0','#e8a820','#cd7f32'];
+  const podioBarY=podioY+PODIO_H;
+
+  podioOrder.forEach((rankIdx,col)=>{
+    const x=PAD+col*slotW;
+    const cx=x+slotW/2;
+    const r=ranked[rankIdx];
+    if(!r) return;
+    const pl=players[r.n]||{};
+    const barH=podioHeights[col];
+    const barY=podioBarY-barH;
     
-    // Row bg
-    ctx.fillStyle=bg;
+    // Podium bar
+    const barGrad=ctx.createLinearGradient(x,barY,x,podioBarY);
+    barGrad.addColorStop(0,podioColors[col]+'44');
+    barGrad.addColorStop(1,podioColors[col]+'22');
+    ctx.fillStyle=barGrad;
     ctx.beginPath();
-    ctx.roundRect(PAD,y+4,W-PAD*2,ROW-6,8);
+    ctx.roundRect(x+4,barY,slotW-8,barH,6);
     ctx.fill();
+    ctx.strokeStyle=podioColors[col]+'88';
+    ctx.lineWidth=1.5;
+    ctx.stroke();
     
-    // Medal/rank
-    ctx.font='bold 18px system-ui';
-    ctx.textAlign='left';
-    ctx.fillStyle=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'rgba(255,255,255,0.4)';
-    ctx.fillText(medals[i]||(i+1)+'.',PAD+10,y+ROW/2+7);
+    // Avatar circle
+    const circleY=barY-28;
+    ctx.beginPath();
+    ctx.arc(cx,circleY,22,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,.4)';
+    ctx.fill();
+    ctx.strokeStyle=podioColors[col];
+    ctx.lineWidth=2.5;
+    ctx.stroke();
     
-    // Avatar
-    ctx.font='20px system-ui';
-    ctx.fillText(players[n]?.avatar||'⚽',PAD+45,y+ROW/2+8);
+    // Avatar emoji
+    ctx.font='22px system-ui';
+    ctx.textAlign='center';
+    ctx.fillText(pl.avatar||'⚽',cx,circleY+8);
+    
+    // Medal
+    ctx.font='14px system-ui';
+    ctx.fillText(medals[rankIdx],cx+16,circleY-12);
     
     // Name
-    ctx.font='bold 15px system-ui';
-    ctx.fillStyle='#f0e6ff';
-    ctx.fillText(n,PAD+80,y+ROW/2+6);
+    ctx.fillStyle='white';
+    ctx.font='bold 12px system-ui';
+    ctx.fillText(r.n,cx,barY+18);
     
     // Points
-    ctx.font='bold 18px system-ui';
-    ctx.textAlign='right';
-    ctx.fillStyle='#4ade80';
-    ctx.fillText(p.total+' pts',W-PAD-10,y+ROW/2+7);
+    ctx.fillStyle=podioColors[col];
+    ctx.font='bold 14px system-ui';
+    ctx.fillText(r.p.total+' pts',cx,barY+36);
   });
   
-  // Footer
-  ctx.fillStyle='rgba(255,255,255,0.25)';
-  ctx.font='11px system-ui';
-  ctx.textAlign='center';
-  ctx.fillText('alonsomontessantiago-boop.github.io/porra2026',W/2,canvas.height-10);
+  // ── FULL TABLE ────────────────────────────────────────
+  let rowY=podioBarY+16;
   
-  // Show modal with image
+  ranked.forEach(({n,p},i)=>{
+    const pl=players[n]||{};
+    const isTop3=i<3;
+    
+    // Row background
+    ctx.fillStyle=i%2===0?'rgba(255,255,255,.06)':'rgba(0,0,0,.15)';
+    ctx.beginPath();
+    ctx.roundRect(PAD,rowY,W-PAD*2,ROW-4,6);
+    ctx.fill();
+    
+    // Position number
+    ctx.fillStyle=isTop3?['#e8a820','#c0c0c0','#cd7f32'][i]:'rgba(255,255,255,.4)';
+    ctx.font=isTop3?'bold 15px system-ui':'13px system-ui';
+    ctx.textAlign='right';
+    ctx.fillText(isTop3?medals[i]:String(i+1)+'.',PAD+32,rowY+26);
+    
+    // Avatar
+    ctx.font='18px system-ui';
+    ctx.textAlign='left';
+    ctx.fillText(pl.avatar||'⚽',PAD+38,rowY+26);
+    
+    // Name
+    ctx.fillStyle='white';
+    ctx.font=isTop3?'bold 14px system-ui':'13px system-ui';
+    ctx.fillText(n,PAD+62,rowY+26);
+    
+    // Points
+    ctx.fillStyle='#4ade80';
+    ctx.font='bold 14px system-ui';
+    ctx.textAlign='right';
+    ctx.fillText(p.total+' pts',W-PAD,rowY+26);
+    
+    rowY+=ROW;
+  });
+  
+  // Footer URL
+  ctx.fillStyle='rgba(255,255,255,.25)';
+  ctx.font='10px system-ui';
+  ctx.textAlign='center';
+  ctx.fillText('alonsomontessantiago-boop.github.io/porra2026',W/2,canvas.height-8);
+  
   const imgData=canvas.toDataURL('image/png');
   document.getElementById('modal-title').textContent='📸 Compartir ranking';
   document.getElementById('modal-body').innerHTML=`
     <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Mantén pulsada la imagen para guardarla o compartirla por WhatsApp.</p>
-    <img src="${imgData}" style="width:100%;border-radius:8px;display:block" alt="Ranking Porra Mundial 2026">
-    <button class="btn btn-p btn-w" style="margin-top:10px" onclick="descargarCaptura('${imgData}')">💾 Descargar PNG</button>`;
+    <img src="${imgData}" style="width:100%;border-radius:8px;display:block;margin-bottom:12px">
+    <button class="btn btn-p btn-w" onclick="descargarPNG('${imgData}','ranking_porra2026.png')">💾 Descargar PNG</button>`;
   document.getElementById('detail-modal').style.display='flex';
 };
-
 window.descargarCaptura=function(imgData){
   const a=document.createElement('a');
   a.href=imgData;
