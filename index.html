@@ -1599,23 +1599,40 @@ window.verJugador=function(name){
           `<div class="jugador-stat"><div class="jugador-stat-val" style="color:${c}">${v||0}</div><div class="jugador-stat-label">${l}</div></div>`).join('')}
       </div>
       ${(()=>{
-        const cats=p._breakdown||{};
-        const items=[
-          {key:'exactos',label:'Exactos',icon:'🎯',color:'#818cf8',val:p.exactos},
-          {key:'quiniela',label:'Quinielas',icon:'⚽',color:'var(--orange)',val:p.quiniela},
-          {key:'grupos',label:'Grupos (1º/2º)',icon:'📊',color:'#4ade80',val:p.grupos},
-          {key:'clasif',label:'Clasificación',icon:'🏆',color:'var(--gold)',val:p.clasif},
-          {key:'elim',label:'Eliminatorias',icon:'⚡',color:'#f472b6',val:p.elim},
-          {key:'bracket_pts',label:'Bracket',icon:'🗂️',color:'var(--blue)',val:p.bracket_pts},
-          {key:'premios',label:'Premios ind.',icon:'🎖️',color:'#34d399',val:p.premios},
-        ].filter(x=>x.val>0);
-        const desgloseHtml=items.length
-          ?items.map(x=>`<div class="match-result-row">
-              <span style="color:var(--t2)">${x.icon} ${x.label}</span>
-              <span style="color:${x.color};font-weight:700">+${x.val} pts</span>
-            </div>`).join('')
-          +'<div style="border-top:1px solid var(--brd);padding-top:8px;margin-top:4px;display:flex;justify-content:space-between"><span style="color:var(--t3);font-size:12px">Total</span><span style="color:var(--gold);font-weight:800;font-size:14px">+${p.total} pts</span></div>'
-          :'<div style="color:var(--t3);font-size:13px">Sin puntos todavía</div>';
+        const catConfig={
+          exactos:   {icon:'🎯',color:'#818cf8',label:'Exactos'},
+          quiniela:  {icon:'⚽',color:'var(--orange)',label:'Quinielas'},
+          grupos:    {icon:'📊',color:'#4ade80',label:'Grupos'},
+          clasif:    {icon:'🏆',color:'var(--gold)',label:'Clasificación'},
+          elim:      {icon:'⚡',color:'#f472b6',label:'Eliminatorias'},
+          bracket_pts:{icon:'🗂️',color:'var(--blue)',label:'Bracket'},
+          premios:   {icon:'🎖️',color:'#34d399',label:'Premios'},
+        };
+        const details=p.details||[];
+        if(!details.length) return acord('📊','Desglose de puntos','<div style="color:var(--t3);font-size:13px">Sin puntos todavía</div>',true);
+        // Group by category
+        const groups={};
+        details.forEach(d=>{
+          if(!groups[d.cat]) groups[d.cat]=[];
+          groups[d.cat].push(d);
+        });
+        const desgloseHtml=Object.entries(groups).map(([cat,items])=>{
+          const cfg=catConfig[cat]||{icon:'•',color:'var(--t1)',label:cat};
+          const total=items.reduce((s,x)=>s+x.v,0);
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--brd)">
+              <span style="font-size:12px;font-weight:800;color:${cfg.color}">${cfg.icon} ${cfg.label}</span>
+              <span style="font-size:12px;font-weight:800;color:${cfg.color}">+${total} pts</span>
+            </div>
+            ${items.map(x=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0 3px 8px;color:var(--t2)">
+              <span>${x.label}</span>
+              <span style="color:${cfg.color};font-weight:600">+${x.v}</span>
+            </div>`).join('')}
+          </div>`;
+        }).join('')
+        +'<div style="border-top:2px solid var(--brd);padding-top:8px;margin-top:4px;display:flex;justify-content:space-between">'
+        +'<span style="font-weight:800;color:var(--t2)">TOTAL</span>'
+        +'<span style="color:var(--gold);font-weight:800;font-size:16px">+'+p.total+' pts</span></div>';
         return acord('📊','Desglose de puntos',desgloseHtml,true);
       })()}
       ${acord('🏅','Badges',badgesHtml,false)}
@@ -2908,8 +2925,27 @@ function renderAdmin(){
   }).join('');
 
   // Retos
-  const retosHtml=`
-    <div style="margin-bottom:12px">
+  // Propuestas pendientes
+  const propsPending=(resultados.propuestasRetos||[]).filter(p=>p.estado==='pendiente');
+  const propsHtml=propsPending.length?`<div style="background:rgba(139,47,201,.1);border:1px solid var(--purple);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px">📬 Propuestas de jugadores (${propsPending.length})</div>
+    ${propsPending.map((p,i)=>`<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid var(--purple)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div><div style="font-size:13px;font-weight:700">${p.titulo}</div>
+          ${p.desc?`<div style="font-size:11px;color:var(--t2)">${p.desc}</div>`:''}
+          <div style="font-size:10px;color:var(--t3);margin-top:3px">Por ${p.autor} · +${p.pts}pts · ${p.tipo}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="btn-xs btn-g" onclick="publicarPropuesta(${i})">✓</button>
+          <button class="btn-xs btn-s" onclick="editarPropuesta(${i})">✏️</button>
+          <button class="btn-xs btn-danger" onclick="rechazarPropuesta(${i})">✗</button>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>`:'';
+
+  // Reto creation form
+  const retosFormHtml=`<div style="margin-bottom:12px">
       <select class="fi" id="reto-template" style="margin-bottom:8px">
         <option value="">— Elige reto predefinido o crea libre —</option>
         ${RETOS_PREDEFINIDOS.map(r=>`<option value="${r.id}">${r.titulo}</option>`).join('')}
@@ -2924,7 +2960,7 @@ function renderAdmin(){
           <select class="fi" id="reto-tipo">
             <option value="texto">Texto libre</option>
             <option value="equipos">Desplegable equipos</option>
-            <option value="jugadores">Desplegable jugadores (escribe opciones)</option>
+            <option value="jugadores">Desplegable jugadores</option>
             <option value="sino">Sí / No</option>
             <option value="numero">Número</option>
             <option value="rango">Rango numérico</option>
@@ -2935,65 +2971,56 @@ function renderAdmin(){
           <select class="fi" id="reto-ganar">
             <option value="exacto">Exacto</option>
             <option value="cercano">Más cercano</option>
-            <option value="individual">Individual (múltiple)</option>
+            <option value="individual">Individual</option>
           </select>
         </div>
       </div>
-      <div class="field"><label>Opciones desplegable (separadas por comas)</label>
-        <input class="fi" type="text" id="reto-opciones" placeholder="Ej: España, Francia, Brasil o Sí, No"></div>
+      <div class="field"><label>Opciones (separadas por comas)</label>
+        <input class="fi" type="text" id="reto-opciones" placeholder="Ej: España, Francia, Brasil"></div>
       <div class="field"><label>Fecha límite</label><input class="fi" type="datetime-local" id="reto-deadline"></div>
       <button class="btn btn-p btn-sm" onclick="crearReto()">Lanzar reto</button>
-    </div>
+  </div>`;
 
-    <!-- Propuestas de jugadores -->
-    ${(()=>{
-      const props=(resultados.propuestasRetos||[]).filter(p=>p.estado==='pendiente');
-      if(!props.length) return '';
-      return `<div style="margin-top:16px;border-top:1px solid var(--brd);padding-top:14px">
-        <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px">📬 Propuestas de jugadores (${props.length})</div>
-        ${props.map((p,i)=>`<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid var(--purple)">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-            <div>
-              <div style="font-size:13px;font-weight:700">${p.titulo}</div>
-              ${p.desc?`<div style="font-size:11px;color:var(--t2)">${p.desc}</div>`:''}
-              <div style="font-size:10px;color:var(--t3);margin-top:4px">Por ${p.autor} · +${p.pts} pts · ${p.tipo}</div>
-            </div>
-            <div style="display:flex;gap:4px">
-              <button class="btn-xs btn-g" onclick="publicarPropuesta(${i})">✓ Publicar</button>
-              <button class="btn-xs btn-s" onclick="editarPropuesta(${i})">✏️</button>
-              <button class="btn-xs btn-danger" onclick="rechazarPropuesta(${i})">✗</button>
-            </div>
-          </div>
-        </div>`).join('')}
-      </div>`;
-    })()}
-    </div>
-    ${retos.map((r,i)=>`<div class="reto-card">
-      <div style="display:flex;justify-content:space-between">
-        <h4>${r.titulo} <span class="badge badge-gold">+${r.pts} pts</span></h4>
-        <div style="display:flex;gap:6px">
-          ${r.activo?`<button class="btn-xs btn-danger" onclick="toggleReto(${i},false)">Desactivar</button>`
-            :`<button class="btn-xs btn-g" onclick="toggleReto(${i},true)">Activar</button>`}
-          <button class="btn-xs btn-s" onclick="editarReto(${i})">✏️</button>
-          <button class="btn-xs ${r.cerrado?'btn-g':'btn-s'}" onclick="cerrarRespuestasReto(${i})">${r.cerrado?'🔓 Abrir':'🔒 Cerrar'}</button>
-          <button class="btn-xs ${r.resuelto?'btn-danger':'btn-s'}" onclick="marcarResuelto(${i})">${r.resuelto?'✓ Resuelto':'Resolver'}</button>
-          <button class="btn-xs btn-danger" onclick="deleteReto(${i})">🗑️</button>
-        </div>
-      </div>
-      <p>${r.desc}</p>
-      <div style="font-size:11px;color:var(--t2)">Respuestas: ${Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length}/${Object.keys(players).length}</div>
-      <div style="margin-top:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">Marcar ganadores:</div>
-        ${Object.keys(players).map(name=>{
-          const resp=(pronosticos[name]||{}).retos?.[r.id];
-          return `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px;cursor:pointer">
-            <input type="checkbox" id="reto-gan-${i}-${name}" ${r.ganadores?.[name]?'checked':''}>
-            ${name}: <em style="color:var(--t2)">${resp||'—'}</em>
-          </label>`;
-        }).join('')}
-        <button class="btn-xs btn-p" onclick="guardarGanadoresReto(${i})">Guardar ganadores</button>
-      </div>
-    </div>`).join('')}`;
+  // Reto cards — collapsible
+  const retosCardsHtml=retos.map(function(r,i){
+    const nResp=Object.keys(players).filter(function(n){return !!(pronosticos[n]||{}).retos?.[r.id];}).length;
+    const nTotal=Object.keys(players).length;
+    const statusColor=r.resuelto?'#4ade80':r.cerrado?'var(--t3)':r.activo?'var(--purple)':'#f87171';
+    const statusLabel=r.resuelto?'✓ Resuelto':r.cerrado?'🔒 Cerrado':r.activo?'● Abierto':'Inactivo';
+    const rid='retoadmin_'+i;
+    const respItems=Object.keys(players).map(function(name){
+      const resp=(pronosticos[name]||{}).retos?.[r.id];
+      const ganador=!!(r.ganadores&&r.ganadores[name]);
+      return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0">'
+        +'<input type="checkbox"'+(ganador?' checked':'')
+        +' data-ri="'+i+'" data-rn="'+name.replace(/"/g,'&quot;')+'" onchange="marcarGanadorReto(this.dataset.ri,this.dataset.rn,this.checked)">'
+        +'<span style="font-size:12px">'+name+':</span> '
+        +'<span style="font-size:11px;color:var(--t2);font-style:italic">'+(resp||'sin respuesta')+'</span>'
+        +'</label>';
+    }).join('');
+    return '<div style="background:var(--s1);border:1px solid var(--brd);border-radius:10px;margin-bottom:6px;overflow:hidden">'
+      +'<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer" data-rid='+rid+' onclick="var b=document.getElementById(this.dataset.rid);b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.titulo+'</div>'
+      +'<div style="font-size:10px;margin-top:2px"><span style="color:'+statusColor+'">'+statusLabel+'</span> · '+nResp+'/'+nTotal+' resp · +'+r.pts+'pts</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:4px">'
+      +(r.activo?'<button class="btn-xs btn-danger" onclick="event.stopPropagation();toggleReto('+i+',false)">Off</button>'
+               :'<button class="btn-xs btn-g" onclick="event.stopPropagation();toggleReto('+i+',true)">On</button>')
+      +'<button class="btn-xs btn-s" onclick="event.stopPropagation();editarReto('+i+')">✏️</button>'
+      +'<button class="btn-xs '+(r.cerrado?'btn-g':'btn-s')+'" onclick="event.stopPropagation();cerrarRespuestasReto('+i+')">'+(r.cerrado?'🔓':'🔒')+'</button>'
+      +'<button class="btn-xs '+(r.resuelto?'btn-danger':'btn-s')+'" onclick="event.stopPropagation();marcarResuelto('+i+')">'+(r.resuelto?'✓ Res':'Res.')+'</button>'
+      +'<button class="btn-xs btn-danger" onclick="event.stopPropagation();deleteReto('+i+')">🗑️</button>'
+      +'</div></div>'
+      +'<div id="'+rid+'" style="display:none;border-top:1px solid var(--brd);padding:12px">'
+      +(r.desc?'<div style="font-size:12px;color:var(--t2);margin-bottom:8px">'+r.desc+'</div>':'')
+      +'<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">Marcar ganadores:</div>'
+      +respItems
+      +'<button class="btn btn-p btn-sm" style="margin-top:8px" onclick="guardarGanadoresReto('+i+')">💾 Guardar ganadores</button>'
+      +'</div></div>';
+  }).join('');
+
+  const retosHtml=propsHtml+retosFormHtml+retosCardsHtml;
 
   // Penalizaciones
   const penHtml=`
@@ -3478,6 +3505,14 @@ window.cerrarRespuestasReto=async function(idx){
   newRetos[idx]={...newRetos[idx], cerrado:!newRetos[idx].cerrado};
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
   renderAdmin();
+};
+
+window.marcarGanadorReto=async function(idx,name,checked){
+  // Live update single winner without full save
+  const newRetos=[...retos];
+  if(!newRetos[idx].ganadores) newRetos[idx].ganadores={};
+  newRetos[idx].ganadores[name]=checked;
+  retos=newRetos; // local update
 };
 
 window.guardarGanadoresReto=async function(idx){
