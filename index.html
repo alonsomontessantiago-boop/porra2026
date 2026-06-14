@@ -2707,103 +2707,70 @@ function renderStats(){
       ${(()=>{
         const hist=resultados.historialRanking||[];
         if(hist.length<2) return '<div style="color:var(--t3);font-size:13px">Se generará automáticamente conforme el admin meta resultados.</div>';
-        const names=Object.keys(players);
-        const total=names.length;
+        const total=Object.keys(players).length;
         const W=document.getElementById('stats-content')?.offsetWidth-40||300;
-        const PAD_L=8,PAD_R=90,PAD_T=18,PAD_B=24;
-        const W2=W-PAD_L-PAD_R, H2=22*total;
+        const PAD_L=18,PAD_R=96,PAD_T=16,PAD_B=22;
+        const W2=W-PAD_L-PAD_R;
+        const ROW_H=22;
+        const H2=ROW_H*(total-1);
         const H=H2+PAD_T+PAD_B;
         const steps=hist.length;
+        const names=Object.keys(players);
         const colors=['#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9','#4ade80','#38bdf8','#fbbf24','#c084fc','#86efac','#fca5a5'];
-        
-        // Get rank of each player at each snapshot
-        function getRankAt(snapshot, name){
-          const pts={};
-          names.forEach(n=>{pts[n]=snapshot.puntos?.[n]||0;});
-          const sorted=[...names].sort((a,b)=>pts[b]-pts[a]);
-          return sorted.indexOf(name)+1;
+
+        function getRankAt(snap,name){
+          if(snap.ranking?.[name]) return snap.ranking[name];
+          if(snap.puntos){
+            const pts={};
+            names.forEach(n=>{pts[n]=snap.puntos[n]||0;});
+            return [...names].sort((a,b)=>pts[b]-pts[a]).indexOf(name)+1;
+          }
+          return names.indexOf(name)+1;
         }
-        
-        // X positions for each snapshot
-        function xPos(i){ return PAD_L + (steps<=1?W2/2:i/(steps-1)*W2); }
-        // Y position for rank
-        function yPos(rank){ return PAD_T+(rank-1)/(total-1||1)*H2; }
-        
-        // Background zones
-        let bgZones='';
-        // Gold zone top 3
-        bgZones+=`<rect x="${PAD_L}" y="${PAD_T}" width="${W2}" height="${yPos(3)-PAD_T+11}" fill="rgba(251,191,36,.06)" rx="4"/>`;
-        // Red zone bottom 3
-        bgZones+=`<rect x="${PAD_L}" y="${yPos(total-2)-11}" width="${W2}" height="${H2-(yPos(total-2)-PAD_T)+22}" fill="rgba(248,113,113,.06)" rx="4"/>`;
-        
-        // Horizontal guide lines for each position
+        function xPos(i){return PAD_L+(steps<=1?W2/2:i/(steps-1)*W2);}
+        function yPos(rank){return PAD_T+(rank-1)/(total-1||1)*H2;}
+
+        let bg='';
+        bg+=`<rect x="${PAD_L}" y="${PAD_T}" width="${W2}" height="${yPos(3)-PAD_T+ROW_H/2}" fill="rgba(251,191,36,.07)" rx="3"/>`;
+        bg+=`<rect x="${PAD_L}" y="${yPos(total-2)-ROW_H/2}" width="${W2}" height="${H2-(yPos(total-2)-PAD_T)+ROW_H}" fill="rgba(248,113,113,.07)" rx="3"/>`;
+
         let guides='';
         for(let pos=1;pos<=total;pos++){
           const y=yPos(pos);
           guides+=`<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+W2}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
-          // Position label on left
-          guides+=`<text x="${PAD_L-2}" y="${y+4}" font-size="8" fill="rgba(255,255,255,.25)" text-anchor="end">${pos}º</text>`;
+          guides+=`<text x="${PAD_L-3}" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)" text-anchor="end">${pos}º</text>`;
         }
-        
-        // X axis date labels
+
         let xLabels='';
+        const seenD=new Set();
         hist.forEach((snap,i)=>{
           const d=new Date(snap.fecha||snap.timestamp||Date.now());
           const label=d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
-          xLabels+=`<text x="${xPos(i)}" y="${H-6}" font-size="8" fill="rgba(255,255,255,.35)" text-anchor="middle">${label}</text>`;
+          if(!seenD.has(label)){seenD.add(label);xLabels+=`<text x="${xPos(i)}" y="${H-5}" font-size="8" fill="rgba(255,255,255,.35)" text-anchor="middle">${label}</text>`;}
         });
-        
-        // Lines per player — each gets an id for animation
-        let lines='', labels='', dots='';
+
+        const uid='sv'+Date.now();
+        let lines='',dots='',labels='',animCSS='';
         names.forEach((n,ni)=>{
           const col=colors[ni%colors.length];
-          const pts=[];
-          hist.forEach((snap,i)=>{
-            const rank=getRankAt(snap,n);
-            pts.push({x:xPos(i),y:yPos(rank),rank});
-          });
-          
-          // Build path
-          let d='';
-          pts.forEach((p,i)=>{ d+=i===0?`M${p.x},${p.y}`:`L${p.x},${p.y}`; });
-          const pathId='ev-path-'+ni;
-          lines+=`<path id="${pathId}" d="${d}" stroke="${col}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
-            <animate attributeName="stroke-dashoffset" from="2000" to="0" dur="${0.8+ni*0.05}s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1"/>
-          </path>`;
-          
-          // End point dot
+          const pts=hist.map((snap,i)=>({x:xPos(i),y:yPos(getRankAt(snap,n)),rank:getRankAt(snap,n)}));
           const last=pts[pts.length-1];
-          dots+=`<circle cx="${last.x}" cy="${last.y}" r="3.5" fill="${col}" stroke="rgba(20,10,40,.8)" stroke-width="1.5">
-            <animate attributeName="r" from="0" to="3.5" dur="${0.8+ni*0.05}s" fill="freeze"/>
-          </circle>`;
-          
-          // Arrow direction ↑↓
-          let arrow='';
-          if(pts.length>=2){
-            const prev=pts[pts.length-2];
-            if(last.rank<prev.rank) arrow='↑';
-            else if(last.rank>prev.rank) arrow='↓';
-          }
-          
-          // Label at end: avatar + name + arrow
+          let d='';
+          pts.forEach((p,i)=>{d+=i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`;});
+          const pid=uid+'p'+ni;
+          const dur=(0.7+ni*0.05).toFixed(2);
+          animCSS+=`@keyframes draw${pid}{to{stroke-dashoffset:0}}#${pid}{stroke-dasharray:3000;stroke-dashoffset:3000;animation:draw${pid} ${dur}s cubic-bezier(.4,0,.2,1) forwards;}`;
+          lines+=`<path id="${pid}" d="${d}" stroke="${col}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+          dots+=`<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="${col}" stroke="rgba(20,10,40,.8)" stroke-width="1.2"/>`;
+          let arrow='',arrowCol='rgba(255,255,255,.5)';
+          if(pts.length>=2){const prev=pts[pts.length-2];if(last.rank<prev.rank){arrow='↑';arrowCol='#4ade80';}else if(last.rank>prev.rank){arrow='↓';arrowCol='#f87171';}}
           const av=players[n]?.avatar||'⚽';
-          const arrowColor=arrow==='↑'?'#4ade80':arrow==='↓'?'#f87171':'rgba(255,255,255,.6)';
-          labels+=`<text x="${last.x+8}" y="${last.y+4}" font-size="9.5" fill="${col}" font-weight="600">${av} ${n}</text>`;
-          if(arrow) labels+=`<text x="${last.x+8+n.length*5.5+18}" y="${last.y+4}" font-size="9" fill="${arrowColor}">${arrow}</text>`;
+          labels+=`<text x="${(last.x+9).toFixed(1)}" y="${(last.y+4).toFixed(1)}" font-size="9.5" fill="${col}" font-weight="600">${av} ${n}${arrow?` <tspan fill="${arrowCol}">${arrow}</tspan>`:''}</text>`;
         });
-        
-        // Animate path lengths
-        const animStyles=names.map((_,ni)=>{
-          const pathId='ev-path-'+ni;
-          return `#${pathId}{ stroke-dasharray:2000; }`;
-        }).join('');
-        
-        const svgId='evol-svg-'+Date.now();
-        return `<style>${animStyles}</style>
-          <svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">
-            ${bgZones}${guides}${xLabels}${lines}${dots}${labels}
-          </svg>
-          <div style="margin-top:8px;display:flex;justify-content:flex-end">
+
+        const svgId=uid+'svg';
+        return `<style>${animCSS}</style><svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">${bg}${guides}${xLabels}${lines}${dots}${labels}</svg>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px">
             <button class="btn btn-s btn-xs" onclick="exportarGrafico('${svgId}')">📸 Exportar</button>
           </div>`;
       })()}
