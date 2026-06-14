@@ -30,14 +30,18 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .header-trophy{font-size:36px;filter:drop-shadow(0 2px 8px rgba(232,168,32,.4))}
 
 /* USER BAR */
-.user-bar{background:var(--s1);padding:9px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--brd)}
+.user-bar{background:var(--s1);padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--gold)}
 .user-bar-left{display:flex;align-items:center;gap:10px}
-.user-avatar-sm{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid transparent;background:var(--s2);flex-shrink:0}
-.av-gold{border-color:#ffd700!important;box-shadow:0 0 8px rgba(255,215,0,.4)}
-.av-silver{border-color:#c0c0c0!important}
-.av-bronze{border-color:#cd7f32!important}
+.user-avatar-sm{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;border:2px solid transparent;background:var(--s2);flex-shrink:0}
+.av-gold{border-color:#ffd700!important;box-shadow:0 0 10px rgba(255,215,0,.5)}
+.av-silver{border-color:#c0c0c0!important;box-shadow:0 0 6px rgba(192,192,192,.3)}
+.av-bronze{border-color:#cd7f32!important;box-shadow:0 0 6px rgba(205,127,50,.3)}
 .user-bar span{font-size:13px;color:var(--t2)}
-.user-bar strong{color:var(--gold)}
+.user-bar strong{color:var(--t1);font-size:14px}
+.user-rank-line{font-size:11px;color:var(--gold);font-weight:700;margin-top:1px}
+.menu-pill{background:linear-gradient(135deg,var(--purple),var(--orange));border:none;color:#fff;font-size:16px;font-weight:800;padding:7px 14px;border-radius:20px;cursor:pointer;transition:all .15s;box-shadow:0 2px 8px rgba(139,47,201,.4)}
+.menu-pill:hover{transform:scale(1.05);box-shadow:0 4px 12px rgba(139,47,201,.5)}
+.menu-pill:active{transform:scale(.97)}
 
 /* TABS */
 .tabs{display:none}
@@ -315,14 +319,11 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
   <div class="user-bar-left">
     <div id="ub-avatar" class="user-avatar-sm"></div>
     <div>
-      <span style="font-size:13px">Hola, <strong id="cur-name"></strong></span>
-      <div style="font-size:11px;color:var(--t3)" id="ub-rank"></div>
+      <div><strong id="cur-name" style="font-size:14px;color:var(--t1)"></strong></div>
+      <div class="user-rank-line" id="ub-rank"></div>
     </div>
   </div>
-  <div style="display:flex;gap:6px;align-items:center">
-    <button class="btn btn-s btn-sm" onclick="logout()">Salir</button>
-    <button class="hamburger-btn" onclick="openNav()" title="Menú">☰</button>
-  </div>
+  <button class="menu-pill" onclick="openNav()">☰ Menú</button>
 </div>
 
 <!-- TABS -->
@@ -1089,7 +1090,11 @@ async function doLogin(name){
   const rank=getRank(name);
   av.className='user-avatar-sm'+(rank===1?' av-gold':rank===2?' av-silver':rank===3?' av-bronze':'');
   const rankEl=document.getElementById('ub-rank');
-  if(rankEl){const medals=['🥇','🥈','🥉'];rankEl.textContent=(medals[rank-1]||rank+'º')+' lugar';}
+  if(rankEl){
+    const medals=['🥇','🥈','🥉'];
+    const pts=calcPoints(currentUser).total;
+    rankEl.textContent=(medals[rank-1]||rank+'º')+' lugar · '+pts+' pts';
+  }
   document.getElementById('tabs').style.display='none';
   document.getElementById('user-bar').style.display='flex';
   // Restore last tab or go to ranking
@@ -1398,6 +1403,7 @@ function renderRanking(){
             <div class="player-avatar ${borderClass}" style="width:30px;height:30px;font-size:15px;flex-shrink:0">${pl.avatar||'⚽'}</div>
             <div style="min-width:0">
               <div style="font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px">${n}</div>
+              ${(()=>{const bs=calcBadges(n,ranked);return bs.length?`<div style="font-size:10px;margin-top:1px">${bs.slice(0,2).map(b=>b.icon).join(' ')}</div>`:'';})()}
               <div class="fill-bar" style="width:50px;margin-top:2px"><div class="fill-bar-inner" style="width:${pc.pct}%"></div></div>
             </div>
           </div>
@@ -2086,9 +2092,9 @@ function renderRetos(){
 
   // Share button - use regular string to avoid nested backtick issues
   const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div>';
-  const shareBtn=topBtns;
 
-  el.innerHTML=activeRetos.map(r=>{
+
+  el.innerHTML=topBtns+activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
@@ -2193,7 +2199,7 @@ function renderRetos(){
       ${myAnswerHtml}
       ${inputHtml}
     </div>`;
-  }).join('')+shareBtn;
+  }).join('');
 }
 
 window.mostrarProponerReto=function(){
@@ -2205,27 +2211,41 @@ window.mostrarProponerReto=function(){
     <div class="field-row">
       <div class="field"><label>Puntos sugeridos</label><input class="fi" type="number" id="prop-pts" value="10" min="1" max="50"></div>
       <div class="field"><label>Tipo de respuesta</label>
-        <select class="fi" id="prop-tipo">
+        <select class="fi" id="prop-tipo" onchange="togglePropOpciones()">
           <option value="texto">Texto libre</option>
           <option value="sino">Sí / No</option>
           <option value="numero">Número</option>
           <option value="equipos">Desplegable equipos</option>
+          <option value="jugadores">Desplegable personalizado</option>
         </select>
       </div>
+    </div>
+    <div class="field" id="prop-opciones-field" style="display:none">
+      <label>Opciones del desplegable (separadas por comas)</label>
+      <input class="fi" type="text" id="prop-opciones" placeholder="ej: Vinicius, Mbappé, Bellingham">
     </div>
     <button class="btn btn-p btn-w" onclick="enviarProponerReto()">💡 Enviar propuesta</button>`;
   document.getElementById('detail-modal').style.display='flex';
 };
 
+window.togglePropOpciones=function(){
+  const tipo=document.getElementById('prop-tipo')?.value;
+  const field=document.getElementById('prop-opciones-field');
+  if(field) field.style.display=tipo==='jugadores'?'block':'none';
+};
+
 window.enviarProponerReto=async function(){
   const titulo=document.getElementById('prop-titulo')?.value.trim();
   if(!titulo){alert('Escribe un título');return;}
+  const tipo=document.getElementById('prop-tipo')?.value||'texto';
+  const opcionesStr=document.getElementById('prop-opciones')?.value.trim()||'';
   const propuesta={
     id:'prop_'+Date.now(),
     titulo,
     desc:document.getElementById('prop-desc')?.value.trim()||'',
     pts:Number(document.getElementById('prop-pts')?.value)||10,
-    tipo:document.getElementById('prop-tipo')?.value||'texto',
+    tipo,
+    opciones:opcionesStr?opcionesStr.split(',').map(x=>x.trim()).filter(Boolean):[],
     autor:currentUser,
     fecha:new Date().toISOString(),
     estado:'pendiente'
@@ -2387,6 +2407,113 @@ window.guardarReto=async function(retoId){
   alert('✅ Respuesta guardada');
 };
 
+// ═══ BADGES ENGINE ═══════════════════════════════════════════════════
+function calcBadges(player, ranked){
+  const badges=[];
+  const p=pronosticos[player]||{};
+  const pp=calcPoints(player);
+  const names=Object.keys(players);
+  const totalGroupMatches=GROUP_MATCHES.length;
+  const myRank=ranked?ranked.findIndex(x=>x.n===player)+1:getRank(player);
+  const total=names.length;
+
+  // 👑 Líder
+  if(myRank===1) badges.push({icon:'👑',name:'Líder',desc:'1º en el ranking'});
+
+  // 🥲 Sin puntos
+  if(pp.total===0) badges.push({icon:'🥲',name:'Sin puntos',desc:'Aún sin puntuar'});
+
+  // 🎓 El Experto — 50%+ exactos en grupos
+  const exactPct=totalGroupMatches>0?Math.round((pp.exactos/getPts('exacto_grupos'))/totalGroupMatches*100):0;
+  if(exactPct>=50) badges.push({icon:'🎓',name:'El Experto',desc:'50%+ exactos en grupos'});
+
+  // 🎯 Francotirador — 3+ exactos (contando por cada 10pts de exactos)
+  const numExactos=Math.floor(pp.exactos/getPts('exacto_grupos'));
+  if(numExactos>=3) badges.push({icon:'🎯',name:'Francotirador',desc:numExactos+' exactos y contando'});
+
+  // 🐙 El Pulpo — 70%+ de quinielas acertadas
+  const totalPartidosConRes=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).length;
+  const numQuinielas=Math.floor(pp.quiniela/getPts('quiniela'));
+  if(totalPartidosConRes>0&&numQuinielas/totalPartidosConRes>=0.7)
+    badges.push({icon:'🐙',name:'El Pulpo',desc:'70%+ de quinielas acertadas'});
+
+  // 😴 Colchonero — más empates pronosticados que victorias
+  let empates=0,victorias=0;
+  GROUP_MATCHES.forEach(m=>{
+    const pm=p.partidos?.[m.id];
+    if(!pm||pm.gl==null) return;
+    if(Number(pm.gl)===Number(pm.gv)) empates++;
+    else victorias++;
+  });
+  if(empates>victorias&&empates>3) badges.push({icon:'😴',name:'Colchonero',desc:'Más empates que victorias pronosticados'});
+
+  // 🃏 El Farol — eligió el campeón menos popular
+  if(p.campeon){
+    const champCount={};
+    names.forEach(n=>{const c=(pronosticos[n]||{}).campeon;if(c)champCount[c]=(champCount[c]||0)+1;});
+    const myChampCount=champCount[p.campeon]||0;
+    const minCount=Math.min(...Object.values(champCount));
+    if(myChampCount===minCount&&myChampCount===1&&names.length>3)
+      badges.push({icon:'🃏',name:'El Farol',desc:'Eligió el campeón menos popular del grupo'});
+  }
+
+  // 🪑 Calentando el Banco — en la 2ª mitad del ranking
+  if(myRank>Math.ceil(total/2)&&total>4)
+    badges.push({icon:'🪑',name:'Calentando el Banco',desc:'En la segunda mitad del ranking'});
+
+  // 🧊 El Congelado — sin puntuar en últimos 5 partidos
+  const recentMatches=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).slice(-5);
+  const recentPts=recentMatches.reduce((sum,m)=>{
+    const pm=p.partidos?.[m.id]; const rm=partidos[m.id];
+    if(!pm||!rm) return sum;
+    const exacto=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
+    const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
+    const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
+    return sum+(exacto?1:resSign===proSign?1:0);
+  },0);
+  if(recentMatches.length>=5&&recentPts===0)
+    badges.push({icon:'🧊',name:'El Congelado',desc:'Sin acertar en los últimos 5 partidos'});
+
+  // 🔄 Sísifo — (necesita historial, placeholder por ahora)
+  const hist=resultados.historialRanking||[];
+  if(hist.length>=4){
+    let cambios=0;
+    for(let i=1;i<hist.length;i++){
+      const prev=hist[i-1].ranking[player];
+      const curr=hist[i].ranking[player];
+      if(prev&&curr&&prev!==curr) cambios++;
+    }
+    if(cambios>=4) badges.push({icon:'🔄',name:'Sísifo',desc:'Sube, baja, sube, baja...'});
+  }
+
+  // 🎯 Oráculo — 3+ retos acertados
+  const retosGanados=retos.filter(r=>r.ganadores?.[player]).length;
+  if(retosGanados>=3) badges.push({icon:'🔮',name:'Oráculo',desc:'Ha acertado 3 o más retos'});
+
+  // 🦆 El Pato — respondió todos los retos pero no acertó ninguno
+  const retosResueltos=retos.filter(r=>r.resuelto);
+  if(retosResueltos.length>=2){
+    const respondio=retosResueltos.every(r=>(p.retos||{})[r.id]);
+    const acerto=retosResueltos.some(r=>r.ganadores?.[player]);
+    if(respondio&&!acerto) badges.push({icon:'🦆',name:'El Pato',desc:'Respondió todo y no acertó nada'});
+  }
+
+  // 🍀 Suertudo — único en acertar un reto (o uno de menos del 20%)
+  retos.forEach(r=>{
+    if(!r.resuelto||!r.ganadores?.[player]) return;
+    const ganadores=Object.values(r.ganadores).filter(Boolean).length;
+    if(ganadores===1&&names.length>=5)
+      badges.push({icon:'🍀',name:'Suertudo',desc:'Único en acertar: '+r.titulo});
+  });
+
+  // 💡 El Inspirado — tiene una propuesta publicada
+  const props=resultados.propuestasRetos||[];
+  if(props.some(pr=>pr.autor===player&&pr.estado==='publicado'))
+    badges.push({icon:'💡',name:'El Inspirado',desc:'Propuso un reto que el admin publicó'});
+
+  return badges;
+}
+
 // ═══ RENDER: STATS ════════════════════════════════════
 function renderStats(){
   const el=document.getElementById('stats-content');
@@ -2450,18 +2577,49 @@ function renderStats(){
     </div>
 
     <div class="card">
+      <div class="card-title">📈 Evolución del ranking</div>
+      ${(()=>{
+        const hist=resultados.historialRanking||[];
+        if(hist.length<2) return '<div style="color:var(--t3);font-size:13px">Se generará automáticamente conforme el admin meta resultados.</div>';
+        const total=Object.keys(players).length;
+        const W=document.getElementById('stats-content')?.offsetWidth-40||300;
+        const H=140;
+        const PAD=20;
+        const colors=['#8b2fc9','#e8621a','#2da653','#e8a820','#3a7bd5','#f87171','#4ade80','#fb923c','#a78bfa','#34d399','#f472b6','#60a5fa'];
+        // X: partidos played, Y: position (inverted - lower = better)
+        const xs=hist.map((_,i)=>PAD+(i/(hist.length-1||1))*(W-PAD*2));
+        const names=Object.keys(players);
+        const lines=names.map((n,ni)=>{
+          const pts=hist.map(h=>({x:xs[hist.indexOf(h)],y:PAD+(((h.ranking[n]||total)-1)/(total-1||1))*(H-PAD*2)}));
+          const d='M'+pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join('L');
+          const lastPt=pts[pts.length-1];
+          return `<path d="${d}" fill="none" stroke="${colors[ni%colors.length]}" stroke-width="2" opacity=".8"/>
+            <text x="${lastPt.x+3}" y="${lastPt.y+4}" font-size="9" fill="${colors[ni%colors.length]}">${players[n]?.avatar||''}</text>`;
+        }).join('');
+        // Y axis labels
+        const yLabels=[1,Math.ceil(total/2),total].map(pos=>{
+          const y=PAD+(((pos)-1)/(total-1||1))*(H-PAD*2);
+          return `<text x="2" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)">${pos}º</text>`;
+        }).join('');
+        return `<div style="overflow-x:auto"><svg width="${W}" height="${H}" style="display:block">
+          ${yLabels}
+          ${lines}
+          ${hist.map((_,i)=>i>0?`<text x="${xs[i]}" y="${H-2}" font-size="7" fill="rgba(255,255,255,.2)" text-anchor="middle">${i}</text>`:'').join('')}
+        </svg></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          ${names.map((n,ni)=>`<span style="font-size:10px;color:${colors[ni%colors.length]}">${players[n]?.avatar||'⚽'} ${n}</span>`).join('')}
+        </div>`;
+      })()}
+    </div>
+
+    <div class="card">
       <div class="card-title">🏅 Badges especiales</div>
       ${names.map(n=>{
-        const pp=calcPoints(n);
-        const exactPct=totalGroupMatches>0?Math.round(pp.exactos/getPts('exacto_grupos')/totalGroupMatches*100):0;
-        const badges=[];
-        if(exactPct>=50) badges.push('🎓 El Experto (50%+ exactos)');
-        if(pp.bracket_pts>0) badges.push('🗂️ Lector del bracket');
-        if(pp.total===0) badges.push('🥲 Sin puntos todavía');
+        const badges=calcBadges(n,ranked);
         if(!badges.length) return '';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--brd2)">
-          <span>${players[n]?.avatar||'⚽'} ${n}</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">${badges.map(b=>`<span class="badge badge-gold">${b}</span>`).join('')}</div>
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--brd2);flex-wrap:wrap">
+          <span style="font-size:13px;min-width:80px">${players[n]?.avatar||'⚽'} ${n}</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${badges.map(b=>`<span class="badge badge-gold" title="${b.desc}">${b.icon} ${b.name}</span>`).join('')}</div>
         </div>`;
       }).filter(Boolean).join('')||'<div style="color:var(--t3);font-size:13px">Sin badges todavía</div>'}
     </div>`;
@@ -2618,7 +2776,10 @@ function renderPerfil(){
         <input type="password" class="fi" id="admin-pw-perfil" placeholder="Código admin..." style="flex:1">
         <button class="btn btn-p btn-sm" onclick="activarAdminDesde()">Activar</button>
       </div>
-    </div>`:'<div class="card" style="margin-top:12px;border-color:var(--green)"><div class="card-title" style="color:#4ade80">✅ Modo admin activo</div></div>'}`;
+    </div>`:'<div class="card" style="margin-top:12px;border-color:var(--green)"><div class="card-title" style="color:#4ade80">✅ Modo admin activo</div></div>'}
+    <div class="card" style="margin-top:12px;border-color:#7f1d1d">
+      <button class="btn btn-danger btn-w" onclick="logout()">🚪 Cerrar sesión</button>
+    </div>`;
   renderAvatarPicker('perfil-avatar-picker', pl.avatar||'⚽', null);
   // Pre-select current avatar
   selectedAvatar=pl.avatar||'⚽';
@@ -3121,6 +3282,21 @@ window.confirmarBorrar=async function(matchId){
   setTimeout(()=>t.remove(),2500);
 };
 
+async function guardarHistorialRanking(){
+  try{
+    const names=Object.keys(players);
+    const ranking={};
+    names.forEach(n=>{ranking[n]=getRank(n);});
+    const res={...resultados};
+    if(!res.historialRanking) res.historialRanking=[];
+    const jugados=Object.keys(partidos).filter(k=>k.startsWith('G_')).length;
+    res.historialRanking.push({fecha:new Date().toISOString(),partidos:jugados,ranking});
+    // Keep last 50 snapshots
+    if(res.historialRanking.length>50) res.historialRanking=res.historialRanking.slice(-50);
+    await setDoc(doc(db,'meta','resultados'),res);
+  }catch(e){console.log('Historial error:',e);}
+}
+
 window.guardarGrupos=async function(){
   const p={...partidos};
   GROUP_MATCHES.forEach(m=>{
@@ -3129,6 +3305,7 @@ window.guardarGrupos=async function(){
     if(gl&&gl.value!==''&&gv&&gv.value!=='') p[m.id]={gl:Number(gl.value),gv:Number(gv.value)};
   });
   await setDoc(doc(db,'meta','partidos'),p);
+  await guardarHistorialRanking();
   alert('✅ Grupos guardados');
 };
 
