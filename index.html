@@ -1598,7 +1598,27 @@ window.verJugador=function(name){
         ${[['Total',p.total,'var(--gold)'],['Exactos',p.exactos,'#818cf8'],['Quinielas',p.quiniela,'var(--orange)'],['Grupos',p.grupos,'#4ade80'],['Elim.',p.elim,'#f472b6'],['Bracket',p.bracket_pts,'var(--blue)']].map(([l,v,c])=>
           `<div class="jugador-stat"><div class="jugador-stat-val" style="color:${c}">${v||0}</div><div class="jugador-stat-label">${l}</div></div>`).join('')}
       </div>
-      ${acord('🏅','Badges',badgesHtml,true)}
+      ${(()=>{
+        const cats=p._breakdown||{};
+        const items=[
+          {key:'exactos',label:'Exactos',icon:'🎯',color:'#818cf8',val:p.exactos},
+          {key:'quiniela',label:'Quinielas',icon:'⚽',color:'var(--orange)',val:p.quiniela},
+          {key:'grupos',label:'Grupos (1º/2º)',icon:'📊',color:'#4ade80',val:p.grupos},
+          {key:'clasif',label:'Clasificación',icon:'🏆',color:'var(--gold)',val:p.clasif},
+          {key:'elim',label:'Eliminatorias',icon:'⚡',color:'#f472b6',val:p.elim},
+          {key:'bracket_pts',label:'Bracket',icon:'🗂️',color:'var(--blue)',val:p.bracket_pts},
+          {key:'premios',label:'Premios ind.',icon:'🎖️',color:'#34d399',val:p.premios},
+        ].filter(x=>x.val>0);
+        const desgloseHtml=items.length
+          ?items.map(x=>`<div class="match-result-row">
+              <span style="color:var(--t2)">${x.icon} ${x.label}</span>
+              <span style="color:${x.color};font-weight:700">+${x.val} pts</span>
+            </div>`).join('')
+          +'<div style="border-top:1px solid var(--brd);padding-top:8px;margin-top:4px;display:flex;justify-content:space-between"><span style="color:var(--t3);font-size:12px">Total</span><span style="color:var(--gold);font-weight:800;font-size:14px">+${p.total} pts</span></div>'
+          :'<div style="color:var(--t3);font-size:13px">Sin puntos todavía</div>';
+        return acord('📊','Desglose de puntos',desgloseHtml,true);
+      })()}
+      ${acord('🏅','Badges',badgesHtml,false)}
       ${acord('🎯','Resultados partidos',isVisible?partResults||'<div style="color:var(--t3)">Sin partidos con resultado aún</div>':'<div style="color:var(--t3)">🔒 Visible cuando el admin cierre la fase</div>',false)}
       ${acord('🏆','Premios y clasificación',isVisible?premiosHtml||'<div style="color:var(--t3)">Sin pronósticos de premios</div>':'<div style="color:var(--t3)">🔒 Visible cuando el admin cierre la fase</div>',false)}
     </div>`;
@@ -3930,7 +3950,10 @@ function renderEvolucion(){
   if(!el) return;
   const hist=resultados.historialRanking||[];
   if(hist.length<2){
-    el.innerHTML='';
+    el.innerHTML=`<div style="background:var(--s1);border:1px solid var(--brd);border-radius:12px;padding:14px;margin-top:4px">
+      <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:6px">📈 Evolución del ranking</div>
+      <div style="font-size:12px;color:var(--t3)">Se actualizará automáticamente cuando el admin guarde los próximos resultados.</div>
+    </div>`;
     return;
   }
   const names=Object.keys(players);
