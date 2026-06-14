@@ -1704,6 +1704,143 @@ window.guardarPronosticos=async function(){
   renderRanking();
 };
 
+// ═══ RENDER: PRONÓSTICOS ════════════════════════════════════════════════
+function renderPronosticos(){
+  if(!currentUser) return;
+  const p=pronosticos[currentUser]||{};
+  const res=resultados||{};
+  const locked=p._locked;
+  const myTable=computeGroupTable(currentUser);
+
+  function teamSelect(id,val,teams,placeholder,readOnly){
+    if(readOnly) return `<div class="fi" style="opacity:.7">${val||placeholder||'—'}</div>`;
+    let opts=`<option value="">${placeholder||'Selecciona...'}</option>`;
+    teams.forEach(t=>opts+=`<option value="${t}" ${cmp(val,t)?'selected':''}>${t}</option>`);
+    return `<select class="fi" id="${id}">${opts}</select>`;
+  }
+
+  const gruposHtml=Object.keys(GRUPOS).map(g=>{
+    const matches=GROUP_MATCHES.filter(m=>m.grupo===g);
+    let matchesHtml=matches.map(m=>{
+      const pm=p.partidos?.[m.id]||{};
+      const rm=partidos[m.id];
+      const exacto=rm&&pm.gl!=null&&Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
+      const resSign=rm&&(Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2');
+      const proSign=pm.gl!=null&&(Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2');
+      const quinHit=rm&&!exacto&&resSign===proSign;
+      return `<div class="match-row">
+        <span class="match-label" style="font-size:11px">${m.local} vs ${m.visit}
+          ${rm!=null?`<span class="badge ${exacto?'badge-ok':quinHit?'badge-gold':'badge-no'}" style="font-size:9px">${exacto?'✓exacto':quinHit?'✓quiniela':'Real:'+rm.gl+'-'+rm.gv}</span>`:''}</span>
+        <div class="score-pair">
+          <input type="number" min="0" max="20" class="si" id="pm-${m.id}-gl" value="${pm.gl??''}" ${locked?'readonly':''}>
+          <span class="score-dash">-</span>
+          <input type="number" min="0" max="20" class="si" id="pm-${m.id}-gv" value="${pm.gv??''}" ${locked?'readonly':''}>
+        </div>
+      </div>`;
+    }).join('');
+
+    const myOrder=myTable[g];
+    let tableHtml='';
+    if(myOrder){
+      tableHtml=`<div style="background:var(--s3);border-radius:6px;padding:6px 8px;margin-top:6px;font-size:11px">
+        <div style="color:var(--t3);margin-bottom:4px">Tu tabla calculada:</div>
+        ${myOrder.map((t,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+          <span style="color:${i<2?'#4ade80':'var(--t3)'};font-weight:700">${i+1}º</span>
+          <span style="color:${i<2?'var(--t1)':'var(--t3)'}">${t}</span>
+          ${i<2?'<span class="badge badge-ok" style="font-size:9px">Clasifica</span>':''}
+        </div>`).join('')}
+      </div>`;
+    }
+    return `<div><span class="grupo-title">Grupo ${g}</span>${matchesHtml}${tableHtml}</div>`;
+  }).join('');
+
+  const tercerosHtml=Array.from({length:8},(_,i)=>{
+    const key='tercero_pool_'+(i+1);
+    return `<div class="field"><label>Tercero ${i+1}</label>
+      ${teamSelect('pf-'+key,p[key],ALL_TEAMS,'Equipo...',locked)}</div>`;
+  }).join('');
+
+  const koHtml=locked?'<div class="note">Pronósticos de eliminatorias bloqueados hasta que el admin abra cada ronda.</div>':
+  ['R32','R16','QF','SF','3RD','FINAL'].map(phase=>{
+    const fk='fase_'+phase+'_abierta';
+    const abierta=res[fk];
+    const phaseLabel={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis',FINAL:'Final','3RD':'3er Puesto'}[phase];
+    if(!abierta) return `<div class="phase-hdr">${phaseLabel}</div>
+      <div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;color:var(--t3);font-size:13px">🔒 Ronda bloqueada</div>`;
+    const matches=ALL_BRACKET.filter(m=>m.phase===phase);
+    return `<div class="phase-hdr open">${phaseLabel} — ABIERTA ✓</div>
+      ${matches.map(m=>{
+        const k='KO_'+m.id;
+        const pm=p.partidos?.[k]||{};
+        const rm=partidos[k];
+        const kn=res.koNames?.[m.id]||{};
+        const localL=kn.local||m.desc?.split(' vs ')[0]||'Equipo A';
+        const visitL=kn.visit||m.desc?.split(' vs ')[1]||'Equipo B';
+        const exacto=rm&&pm.gl!=null&&Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
+        const hitPasa=rm&&cmp(pm.pasa,rm.ganador);
+        const localTeams=kn.local&&kn.visit?[kn.local,kn.visit]:ALL_TEAMS;
+        return `<div class="match-row" style="flex-direction:column;gap:6px;padding:8px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+            <span class="match-label" style="font-size:11px">${localL} vs ${visitL}</span>
+            <div class="score-pair">
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}" ${locked?'readonly':''}>
+              <span class="score-dash">-</span>
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}" ${locked?'readonly':''}>
+              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" ${locked?'readonly':''} placeholder="Pen? ej: España" style="width:90px;font-size:11px">
+              ${rm?`<span class="badge ${exacto?'badge-ok':'badge-no'}" style="font-size:9px">${exacto?'✓exacto':'Real:'+rm.gl+'-'+rm.gv}</span>`:''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <label style="font-size:11px;color:var(--t2);white-space:nowrap">Quién pasa (+${getPts('pasa_ronda')}):</label>
+            ${teamSelect('pm-'+k+'-pasa',pm.pasa,localTeams,'Equipo...',locked)}
+            ${rm?.ganador?`<span class="badge ${hitPasa?'badge-ok':'badge-no'}" style="font-size:9px">${hitPasa?'✓':'era '+rm.ganador}</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}`;
+  }).join('');
+
+  document.getElementById('prono-content').innerHTML=`
+    ${locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':''}
+    <div class="card">
+      <div class="card-title">🏆 Clasificación final</div>
+      <div class="field"><label>Campeón (+${getPts('campeon')} pts)</label>
+        ${teamSelect('pf-campeon',p.campeon,ALL_TEAMS,'Selecciona el campeón...',locked)}</div>
+      <div class="field-row">
+        ${['semi1','semi2','semi3','semi4'].map((k,i)=>`<div class="field"><label>Semi ${i+1} (+${getPts('semi')})</label>
+          ${teamSelect('pf-'+k,p[k],ALL_TEAMS,'Equipo...',locked)}</div>`).join('')}
+      </div>
+      <div class="field"><label>3er puesto (+${getPts('tercero')} pts)</label>
+        ${teamSelect('pf-tercero',p.tercero,ALL_TEAMS,'Equipo...',locked)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">⚽ Goleadores / Asistentes / Balón</div>
+      ${['gol1','gol2','gol3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} goleador (+${getPts(k)} pts)</label>
+        <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
+      ${['asist1','asist2','asist3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} asistente (+${getPts(k)} pts)</label>
+        <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
+      ${['balon1','balon2','balon3'].map((k,i)=>`<div class="field"><label>Balón de ${['Oro','Plata','Bronce'][i]} (+${getPts(k)} pts)</label>
+        <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Resultados grupos — tu tabla se calcula automáticamente</div>
+      <p class="note">Introduce los marcadores de los 72 partidos. La app calcula la tabla de cada grupo.</p>
+      ${gruposHtml}
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 Mejores terceros que pasan (pool de 8, +${getPts('terceros')} pt c/u)</div>
+      <p class="note">Elige los 8 equipos que crees que pasarán como mejores terceros. Sin orden.</p>
+      <div class="field-row4">${tercerosHtml}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 Fase eliminatoria — marcadores + quién pasa</div>
+      ${koHtml}
+    </div>
+    ${!locked?`<div style="padding-bottom:20px">
+      <button class="btn btn-p btn-w" onclick="guardarPronosticos()">💾 Guardar mis pronósticos</button>
+      <div id="save-ok" class="saved-ok">✅ Guardado</div>
+    </div>`:''}`;
+}
+
 // ═══ RENDER: BRACKET ══════════════════════════════════
 function renderBracket(){
   if(!currentUser) return;
@@ -2063,11 +2200,11 @@ function renderRetos(){
   const activeRetos=retos.filter(r=>r.activo).sort((a,b)=>{
     const aCerrado=a.cerrado||new Date()>new Date(a.deadline);
     const bCerrado=b.cerrado||new Date()>new Date(b.deadline);
-    const aGanado=a.ganadores?.[currentUser];
-    const bGanado=b.ganadores?.[currentUser];
-    // Order: open(0) → closed+lost(1) → won(2)
-    const aScore=!aCerrado?0:aGanado?2:1;
-    const bScore=!bCerrado?0:bGanado?2:1;
+    const aResuelto=a.resuelto===true;
+    const bResuelto=b.resuelto===true;
+    // Order: open(0) → cerrado sin resolver(1) → resuelto(2)
+    const aScore=!aCerrado?0:aResuelto?2:1;
+    const bScore=!bCerrado?0:bResuelto?2:1;
     return aScore-bScore;
   });
 
@@ -2491,6 +2628,9 @@ function calcBadges(player, ranked){
     if(ganadores===1&&names.length>=5)
       badges.push({icon:'🍀',name:'Suertudo',desc:'Único en acertar: '+r.titulo});
   });
+
+  // 🪲 El Escarabajo — puesto 11, 12 o 13
+  if(myRank>=11) badges.push({icon:'🪲',name:'El Escarabajo',desc:'Pisado por todos (puesto '+myRank+'º)'});
 
   // 💡 El Inspirado — tiene una propuesta publicada
   const props=resultados.propuestasRetos||[];
@@ -3519,12 +3659,13 @@ window.guardarGanadoresReto=async function(idx){
   const newRetos=[...retos];
   const ganadores={};
   Object.keys(players).forEach(name=>{
-    const cb=document.getElementById('reto-gan-'+idx+'-'+name);
+    const cb=document.querySelector('input[data-ri="'+idx+'"][data-rn="'+name+'"]');
     if(cb) ganadores[name]=cb.checked;
   });
   newRetos[idx]={...newRetos[idx],ganadores};
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
-  alert('✅ Ganadores guardados');
+  await guardarHistorialRanking();
+  showToast('✅ Ganadores guardados');
 };
 
 window.agregarPenalizacion=async function(){
@@ -4322,9 +4463,13 @@ window.activarAdminDesde=function(){
   const pw=document.getElementById('admin-pw-perfil')?.value;
   if(pw===ADMIN_PASS){
     isAdmin=true;
-    document.getElementById('admin-tab').style.display='flex';
     document.getElementById('admin-pw-perfil').value='';
-    showToast('✅ Modo admin activado');
+    // Show toast notification
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#0d2e0d;color:#4ade80;border:1px solid #2da653;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5)';
+    t.textContent='✅ Modo admin activado';
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),3000);
     renderPerfil();
   } else {
     alert('Código incorrecto');
