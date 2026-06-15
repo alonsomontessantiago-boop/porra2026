@@ -799,7 +799,7 @@ const AVATARS = {
 const PTS_DEFAULT = {
   g1:10, g2:5, terceros:2,
   exacto_grupos:10, quiniela:4,
-  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:3,
+  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
   campeon:20, semi:15, tercero:10,
@@ -1295,15 +1295,59 @@ function _calcPointsRaw(player){
       const pm=p.partidos?.[k];
       const rm=partidos[k];
       if(!pm||!rm||rm.gl==null) return;
-      // Exact score
-      if(Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv)){
-        if(pm.pen&&rm.pen&&cmp(pm.pen,rm.pen)) add('exactos','Exacto KO '+m.id+': '+pm.gl+'-'+pm.gv+'('+pm.pen+')',getPts('exacto_ko'));
-        else if(Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv)) add('exactos','Marcador KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko_pen'));
+
+      const pmGl=Number(pm.gl), pmGv=Number(pm.gv);
+      const rmGl=Number(rm.gl), rmGv=Number(rm.gv);
+      const rmPen=rm.pen||''; // who won on penalties (real)
+      const pmPen=pm.pen||''; // player's penalty winner prediction
+      const rmGanador=rm.ganador||'';
+
+      const exactoMarcador=(pmGl===rmGl && pmGv===rmGv);
+      const hayPenaltisReal=!!rmPen; // real match went to penalties
+      const hayPenaltisProno=!!pmPen; // player predicted penalties
+
+      let pts=0, label='', cat='elim';
+
+      if(!hayPenaltisReal){
+        // No penalties in real match
+        if(exactoMarcador){
+          // +14: exact score (implies correct winner too)
+          pts=getPts('exacto_ko')+getPts('pasa_ronda');
+          label='Exacto KO '+k+': '+pmGl+'-'+pmGv;
+          cat='exactos';
+        } else if(rmGanador && cmp(pm.pasa,rmGanador)){
+          // +4: only correct on who passes
+          pts=getPts('pasa_ronda');
+          label='Pasa '+k+': '+pm.pasa;
+        }
+      } else {
+        // Real match went to penalties (score in 90+extra was a draw)
+        if(hayPenaltisProno && cmp(pmPen,rmPen)){
+          // Player predicted penalties AND correct winner → +14
+          pts=getPts('exacto_ko')+getPts('pasa_ronda');
+          label='Exacto penaltis '+k+': '+pmPen;
+          cat='exactos';
+        } else if(hayPenaltisProno && !cmp(pmPen,rmPen)){
+          // Player predicted penalties but wrong winner → +5
+          pts=getPts('exacto_ko_pen');
+          label='Penaltis (ganador fallado) '+k;
+        } else if(exactoMarcador){
+          // Player got the 90min/extra score right but didn't predict penalties
+          // Counts as exact score but no penalty bonus → +14 (still got it right)
+          pts=getPts('exacto_ko')+getPts('pasa_ronda');
+          label='Exacto prórroga '+k+': '+pmGl+'-'+pmGv;
+          cat='exactos';
+        } else if(rmGanador && cmp(pm.pasa,rmGanador)){
+          // Only correct on who passes → +4
+          pts=getPts('pasa_ronda');
+          label='Pasa '+k+': '+pm.pasa;
+        }
       }
-      // Quién pasa
-      if(pm.pasa&&rm.ganador&&cmp(pm.pasa,rm.ganador)) add('elim','Pasa '+m.id+': '+pm.pasa,getPts('pasa_ronda'));
+
+      if(pts>0) add(cat, label, pts);
     });
   });
+;
 
   // Bracket (pre-Mundial) - cruce + quién pasa
   if(p.bracket){
@@ -4129,7 +4173,7 @@ function renderComparador(){
   }
 
   function dataRow(label, key, isVisible=true){
-    return `<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2);position:sticky;left:0;z-index:5;box-shadow:2px 0 4px rgba(0,0,0,.3)">${label}</td>
+    return `<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2)">${label}</td>
       ${selectedPlayers.map(n=>cell((pronosticos[n]||{})[key], key, isVisible)).join('')}</tr>`;
   }
 
@@ -4291,11 +4335,11 @@ function renderComparador(){
       <table style="width:100%;border-collapse:collapse;min-width:${200+selectedPlayers.length*110}px">
         <thead>
           <tr style="background:var(--s1)">
-            <th style="padding:8px;font-size:11px;color:var(--t3);text-align:left;min-width:130px;border-bottom:2px solid var(--gold);position:sticky;top:var(--sticky-top,0);background:var(--s1);z-index:13;box-shadow:2px 2px 6px rgba(0,0,0,.5)">Pronóstico</th>
+            <th style="padding:8px;font-size:11px;color:var(--t3);text-align:left;min-width:130px;border-bottom:2px solid var(--gold);background:var(--s2)">Pronóstico</th>
             ${selectedPlayers.map(n=>{
               const pts=calcPoints(n).total;
               const rank=getRank(n);
-              return `<th style="padding:8px 4px;text-align:center;min-width:100px;border-bottom:2px solid var(--gold);cursor:pointer;position:sticky;top:var(--sticky-top,0);background:var(--s1);z-index:12;box-shadow:0 2px 6px rgba(0,0,0,.4)" onclick="verJugador('${esc(n)}')">
+              return `<th style="padding:8px 4px;text-align:center;min-width:100px;border-bottom:2px solid var(--gold);cursor:pointer;background:var(--s2)" onclick="verJugador('${esc(n)}')">
                 <div style="font-size:22px;line-height:1">${players[n]?.avatar||'⚽'}</div>
                 <div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:3px">${n}</div>
                 <div style="font-size:10px;color:var(--t3)">${rank}º · ${pts}pts</div>
@@ -5098,7 +5142,7 @@ const AVATARS = {
 const PTS_DEFAULT = {
   g1:10, g2:5, terceros:2,
   exacto_grupos:10, quiniela:4,
-  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:3,
+  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
   campeon:20, semi:15, tercero:10,
