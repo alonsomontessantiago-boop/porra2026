@@ -3107,19 +3107,21 @@ function renderAdmin(){
   const propsPending=(resultados.propuestasRetos||[]).filter(p=>p.estado==='pendiente');
   const propsHtml=propsPending.length?`<div style="background:rgba(139,47,201,.1);border:1px solid var(--purple);border-radius:10px;padding:12px;margin-bottom:12px">
     <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px">📬 Propuestas de jugadores (${propsPending.length})</div>
-    ${propsPending.map((p,i)=>`<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid var(--purple)">
+    ${propsPending.map((p)=>{
+      const realIdx=(resultados.propuestasRetos||[]).indexOf(p);
+      return `<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid var(--purple)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div><div style="font-size:13px;font-weight:700">${p.titulo}</div>
           ${p.desc?`<div style="font-size:11px;color:var(--t2)">${p.desc}</div>`:''}
           <div style="font-size:10px;color:var(--t3);margin-top:3px">Por ${p.autor} · +${p.pts}pts · ${p.tipo}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="btn-xs btn-g" onclick="publicarPropuesta(${i})">✓</button>
-          <button class="btn-xs btn-s" onclick="editarPropuesta(${i})">✏️</button>
-          <button class="btn-xs btn-danger" onclick="rechazarPropuesta(${i})">✗</button>
+          <button class="btn-xs btn-g" onclick="publicarPropuesta(${realIdx})">✓</button>
+          <button class="btn-xs btn-s" onclick="editarPropuesta(${realIdx})">✏️</button>
+          <button class="btn-xs btn-danger" onclick="rechazarPropuesta(${realIdx})">✗</button>
         </div>
       </div>
-    </div>`).join('')}
+    </div>`;}).join('')}
   </div>`:'';
 
   // Reto creation form
