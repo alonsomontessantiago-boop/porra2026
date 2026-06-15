@@ -320,6 +320,20 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .match-result-row:last-child{border-bottom:none}
 
 </style>
+<script>
+// Block browser scroll restoration before anything loads
+if('scrollRestoration' in history) history.scrollRestoration='manual';
+window.addEventListener('pageshow', function(e){
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
+});
+window.addEventListener('load', function(){
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
+});
+</script>
 </head>
 <body>
 <div class="app">
@@ -4829,8 +4843,31 @@ window.activarAdminDesde=function(){
 };
 
 // ═══ BOOT ════════════════════════════════════════════════
+// Safari compatibility: set a loading timeout
+const _loadTimeout=setTimeout(()=>{
+  const pl=document.getElementById('player-list');
+  if(pl&&pl.innerHTML.includes('Cargando')){
+    pl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--t2)">
+      <div style="font-size:32px;margin-bottom:12px">⏱️</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">Tardando más de lo normal...</div>
+      <div style="font-size:13px;color:var(--t3);margin-bottom:16px">Puede ser un problema de conexión o de caché en Safari.</div>
+      <button class="btn btn-p btn-w" onclick="location.reload()">🔄 Reintentar</button>
+      <div style="font-size:11px;color:var(--t3);margin-top:12px">Si el problema persiste, abre en modo incógnito o borra la caché del sitio.</div>
+    </div>`;
+  }
+},12000);
+
 listenMeta();
-loadPlayers();
+loadPlayers().then(()=>clearTimeout(_loadTimeout)).catch(e=>{
+  clearTimeout(_loadTimeout);
+  const pl=document.getElementById('player-list');
+  if(pl) pl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--t2)">
+    <div style="font-size:32px;margin-bottom:12px">❌</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px">Error al conectar</div>
+    <div style="font-size:13px;color:var(--t3);margin-bottom:16px">${e.message||'Error de Firebase'}</div>
+    <button class="btn btn-p btn-w" onclick="location.reload()">🔄 Reintentar</button>
+  </div>`;
+});
 // Make all module functions globally accessible
 const _fns = {
   go, logout, closeModal, showOnboarding, obNav,
