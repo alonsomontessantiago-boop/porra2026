@@ -2289,6 +2289,12 @@ function renderRetos(){
         </select>`;
       } else if(tipo==='numero'||tipo==='rango'){
         fieldHtml=`<input class="fi" type="number" id="reto-${r.id}" value="${myRespuesta||''}" placeholder="${tipo==='rango'?'Escribe un número...':'Número...'}" style="font-size:18px;font-weight:700;text-align:center;padding:12px">`;
+      } else if(tipo==='desplegable'){
+        const opciones=r.opciones||[];
+        fieldHtml=`<select class="fi" id="reto-${r.id}" style="font-size:14px;padding:10px 12px">
+          <option value="">Selecciona una opción...</option>
+          ${opciones.map(o=>`<option value="${o}" ${cmp(myRespuesta,o)?'selected':''}>${o}</option>`).join('')}
+        </select>`;
       } else {
         fieldHtml=`<input class="fi" type="text" id="reto-${r.id}" value="${myRespuesta||''}" placeholder="Escribe tu respuesta..." style="font-size:14px;padding:10px 12px">`;
       }
@@ -3146,6 +3152,7 @@ function renderAdmin(){
             <option value="numero">Número</option>
             <option value="rango">Rango numérico</option>
             <option value="multiple">Respuesta múltiple</option>
+          <option value="desplegable">Desplegable personalizado</option>
           </select>
         </div>
         <div class="field"><label>Ganar por</label>
@@ -3566,6 +3573,7 @@ window.editarPropuesta=function(idx){
           <option value="numero" ${p.tipo==='numero'?'selected':''}>Número</option>
           <option value="rango" ${p.tipo==='rango'?'selected':''}>Rango numérico</option>
           <option value="multiple" ${p.tipo==='multiple'?'selected':''}>Múltiple</option>
+          <option value="desplegable" ${p.tipo==='desplegable'?'selected':''}>>Desplegable personalizado</option>
         </select>
       </div>
     </div>
