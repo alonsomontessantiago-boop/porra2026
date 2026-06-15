@@ -22,7 +22,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .app{max-width:720px;margin:0 auto;padding-bottom:60px}
 
 /* HEADER */
-.header{background:linear-gradient(135deg,#3d006b,#8b1a1a,#bf5500);padding:16px 20px 14px;border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:200}
+.header{background:linear-gradient(135deg,#3d006b,#8b1a1a,#bf5500);padding:16px 20px 14px;border-bottom:2px solid var(--gold)}
 .header::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(139,47,201,.3),rgba(232,98,26,.2));pointer-events:none}
 .header-inner{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center}
 .header h1{font-size:20px;font-weight:800;color:var(--gold);letter-spacing:.5px}
@@ -325,6 +325,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 <div class="app">
 
 <!-- HEADER -->
+<div id="sticky-top" style="position:sticky;top:0;z-index:200">
 <div class="header">
   <div class="header-inner">
     <div style="display:flex;align-items:center;gap:10px">
@@ -351,6 +352,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 
 <!-- TABS -->
 <div id="tabs" style="display:none"></div>
+</div><!-- /sticky-top -->
 
 <!-- NAV OVERLAY + DRAWER -->
 <div id="nav-overlay" class="nav-overlay" onclick="closeNav()"></div>
@@ -1016,7 +1018,7 @@ function listenMeta(){
     resultados=d.exists()?d.data():{};
     if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); renderEvolucion();
   fixStickyOffsets();
-  if(!window._firstLoad){window._firstLoad=true;window.scrollTo(0,0);window.addEventListener('resize',fixStickyOffsets);} }
+  if(!window._firstLoad){window._firstLoad=true;setTimeout(()=>window.scrollTo(0,0),100);window.addEventListener('resize',fixStickyOffsets);} }
     if(isActive('pronosticos')) renderPronosticos();
     if(isActive('normas')) renderNormas();
     if(isActive('bracket')) renderBracket();
@@ -1128,6 +1130,7 @@ async function doLogin(name){
   await loadAllPronos();
   document.getElementById('login-page').classList.remove('on');
   document.getElementById('user-bar').style.display='flex';
+  setTimeout(fixStickyOffsets,50);
   const pl=players[name]||{};
   document.getElementById('cur-name').textContent=name;
   const av=document.getElementById('ub-avatar');
@@ -1414,23 +1417,14 @@ function getRankFromSorted(name,sorted){ return sorted.findIndex(x=>x.n===name)+
 // ═══ RENDER: RANKING ════════════════════════════════════
 
 function fixStickyOffsets(){
-  const header=document.querySelector('.header');
-  const userBar=document.querySelector('.user-bar');
-  if(!header||!userBar) return;
-  const totalH=header.offsetHeight+userBar.offsetHeight;
+  const stickyTop=document.getElementById('sticky-top');
+  if(!stickyTop) return;
+  const totalH=stickyTop.offsetHeight;
   document.documentElement.style.setProperty('--sticky-top', totalH+'px');
-  // Fix drawer to start below sticky header+userbar
   const drawer=document.querySelector('.nav-drawer');
-  if(drawer){
-    drawer.style.top=totalH+'px';
-    drawer.style.height='calc(100% - '+totalH+'px)';
-  }
-  // Fix overlay too
+  if(drawer){ drawer.style.top=totalH+'px'; drawer.style.height='calc(100% - '+totalH+'px)'; }
   const overlay=document.querySelector('.nav-overlay');
-  if(overlay){
-    overlay.style.top=totalH+'px';
-    overlay.style.height='calc(100% - '+totalH+'px)';
-  }
+  if(overlay){ overlay.style.top=totalH+'px'; overlay.style.height='calc(100% - '+totalH+'px)'; }
 }
 
 function renderRanking(){
