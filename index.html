@@ -2652,111 +2652,185 @@ window.guardarReto=async function(retoId){
 };
 
 // ═══ BADGES ENGINE ═══════════════════════════════════════════════════
-function calcBadges(player, ranked){
+function calcBadges(player, allPlayers, pronosticos, resultados, partidos, retos){
   const badges=[];
+  const names=allPlayers?Object.keys(allPlayers):[];
   const p=pronosticos[player]||{};
-  const pp=calcPoints(player);
-  const names=Object.keys(players);
-  const totalGroupMatches=GROUP_MATCHES.length;
-  const myRank=ranked?ranked.findIndex(x=>x.n===player)+1:getRank(player);
-  const total=names.length;
+  const hist=resultados.historialRanking||[];
+  
+  // Helper: get rank from latest snapshot
+  function getLatestRank(name){
+    if(!hist.length) return getRank(name);
+    return hist[hist.length-1].ranking?.[name]||getRank(name);
+  }
+  function getRankAt(snapIdx, name){
+    return hist[snapIdx]?.ranking?.[name]||0;
+  }
+  
+  const myRank=getRank(player);
+  const pts=calcPoints(player);
+  const allPts=names.map(n=>calcPoints(n).total);
+  const avgPts=allPts.reduce((a,b)=>a+b,0)/(allPts.length||1);
+  const ranked=[...names].sort((a,b)=>desempate(calcPoints(b),b)-desempate(calcPoints(a),a));
+
+  // ── AUTOMATIC BADGES ────────────────────────────────────────────────────
 
   // 👑 Líder
-  if(myRank===1) badges.push({icon:'👑',name:'Líder',desc:'1º en el ranking'});
+  if(myRank===1) badges.push({icon:'👑',name:'El Líder',desc:'Va primero en el ranking'});
 
-  // 🥲 Sin puntos
-  if(pp.total===0) badges.push({icon:'🥲',name:'Sin puntos',desc:'Aún sin puntuar'});
+  // 🪲 El Escarabajo — puesto 11-13
+  if(myRank>=11) badges.push({icon:'🪲',name:'El Escarabajo',desc:'Pisado por todos (puesto '+myRank+'º)'});
 
-  // 🎓 El Experto — 50%+ exactos en grupos
-  const exactPct=totalGroupMatches>0?Math.round((pp.exactos/getPts('exacto_grupos'))/totalGroupMatches*100):0;
-  if(exactPct>=50) badges.push({icon:'🎓',name:'El Experto',desc:'50%+ exactos en grupos'});
+  // 🎯 Francotirador — más exactos
+  const myExactos=pts.exactos;
+  const maxExactos=Math.max(...names.map(n=>calcPoints(n).exactos));
+  if(myExactos>0 && myExactos===maxExactos && names.length>1)
+    badges.push({icon:'🎯',name:'El Francotirador',desc:'Más resultados exactos del grupo'});
 
-  // 🎯 Francotirador — 3+ exactos (contando por cada 10pts de exactos)
-  const numExactos=Math.floor(pp.exactos/getPts('exacto_grupos'));
-  if(numExactos>=3) badges.push({icon:'🎯',name:'Francotirador',desc:numExactos+' exactos y contando'});
+  // 🐙 El Pulpo — más quinielas
+  const myQuiniela=pts.quiniela;
+  const maxQ=Math.max(...names.map(n=>calcPoints(n).quiniela));
+  if(myQuiniela>0 && myQuiniela===maxQ && names.length>1)
+    badges.push({icon:'🐙',name:'El Pulpo',desc:'Más quinielas acertadas'});
 
-  // 🐙 El Pulpo — 70%+ de quinielas acertadas
-  const totalPartidosConRes=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).length;
-  const numQuinielas=Math.floor(pp.quiniela/getPts('quiniela'));
-  if(totalPartidosConRes>0&&numQuinielas/totalPartidosConRes>=0.7)
-    badges.push({icon:'🐙',name:'El Pulpo',desc:'70%+ de quinielas acertadas'});
+  // 😴 Colchonero — menos puntos
+  if(myRank===names.length && names.length>1)
+    badges.push({icon:'😴',name:'El Colchonero',desc:'Último en el ranking'});
 
-  // 😴 Colchonero — más empates pronosticados que victorias
-  let empates=0,victorias=0;
-  GROUP_MATCHES.forEach(m=>{
-    const pm=p.partidos?.[m.id];
-    if(!pm||pm.gl==null) return;
-    if(Number(pm.gl)===Number(pm.gv)) empates++;
-    else victorias++;
-  });
-  if(empates>victorias&&empates>3) badges.push({icon:'😴',name:'Colchonero',desc:'Más empates que victorias pronosticados'});
+  // 🃏 El Farol — muchos puntos de premios vs pocos de grupos
+  if(pts.premios>pts.grupos && pts.premios>20)
+    badges.push({icon:'🃏',name:'El Farol',desc:'Más puntos de premios que de grupos'});
 
-  // 🃏 El Farol — eligió el campeón menos popular
-  if(p.campeon){
-    const champCount={};
-    names.forEach(n=>{const c=(pronosticos[n]||{}).campeon;if(c)champCount[c]=(champCount[c]||0)+1;});
-    const myChampCount=champCount[p.campeon]||0;
-    const minCount=Math.min(...Object.values(champCount));
-    if(myChampCount===minCount&&myChampCount===1&&names.length>3)
-      badges.push({icon:'🃏',name:'El Farol',desc:'Eligió el campeón menos popular del grupo'});
+  // 🪑 Calentando el Banco — cero puntos de eliminatorias
+  if(pts.elim===0 && pts.bracket===0)
+    badges.push({icon:'🪑',name:'Calentando el Banco',desc:'Sin puntos en eliminatorias ni bracket'});
+
+  // 🧊 El Congelado — mismo puesto en todos los snapshots
+  if(hist.length>=3){
+    const ranks=hist.map(s=>s.ranking?.[player]||0).filter(r=>r>0);
+    if(ranks.length>=3 && ranks.every(r=>r===ranks[0]))
+      badges.push({icon:'🧊',name:'El Congelado',desc:'No ha movido su posición en el ranking'});
   }
 
-  // 🪑 Calentando el Banco — en la 2ª mitad del ranking
-  if(myRank>Math.ceil(total/2)&&total>4)
-    badges.push({icon:'🪑',name:'Calentando el Banco',desc:'En la segunda mitad del ranking'});
-
-  // 🧊 El Congelado — sin puntuar en últimos 5 partidos
-  const recentMatches=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).slice(-5);
-  const recentPts=recentMatches.reduce((sum,m)=>{
-    const pm=p.partidos?.[m.id]; const rm=partidos[m.id];
-    if(!pm||!rm) return sum;
-    const exacto=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
-    const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
-    const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
-    return sum+(exacto?1:resSign===proSign?1:0);
-  },0);
-  if(recentMatches.length>=5&&recentPts===0)
-    badges.push({icon:'🧊',name:'El Congelado',desc:'Sin acertar en los últimos 5 partidos'});
-
-  // 🔄 Sísifo — (necesita historial, placeholder por ahora)
-  const hist=resultados.historialRanking||[];
+  // 🔄 Sísifo — sube y baja constantemente
   if(hist.length>=4){
     let cambios=0;
     for(let i=1;i<hist.length;i++){
-      const prev=hist[i-1].ranking[player];
-      const curr=hist[i].ranking[player];
+      const prev=getRankAt(i-1,player), curr=getRankAt(i,player);
       if(prev&&curr&&prev!==curr) cambios++;
     }
-    if(cambios>=4) badges.push({icon:'🔄',name:'Sísifo',desc:'Sube, baja, sube, baja...'});
+    if(cambios>=hist.length-1 && hist.length>=4)
+      badges.push({icon:'🔄',name:'Sísifo',desc:'Siempre cambiando de posición'});
   }
 
-  // 🎯 Oráculo — 3+ retos acertados
-  const retosGanados=retos.filter(r=>r.ganadores?.[player]).length;
-  if(retosGanados>=3) badges.push({icon:'🔮',name:'Oráculo',desc:'Ha acertado 3 o más retos'});
+  // 🔮 Oráculo — acertó el campeón
+  const campeonReal=resultados.campeonReal;
+  if(campeonReal && cmp(p.campeon,campeonReal))
+    badges.push({icon:'🔮',name:'El Oráculo',desc:'Acertó el campeón del Mundial'});
 
-  // 🦆 El Pato — respondió todos los retos pero no acertó ninguno
-  const retosResueltos=retos.filter(r=>r.resuelto);
-  if(retosResueltos.length>=2){
-    const respondio=retosResueltos.every(r=>(p.retos||{})[r.id]);
-    const acerto=retosResueltos.some(r=>r.ganadores?.[player]);
-    if(respondio&&!acerto) badges.push({icon:'🦆',name:'El Pato',desc:'Respondió todo y no acertó nada'});
-  }
+  // 🦆 El Pato — cero puntos totales
+  if(pts.total===0)
+    badges.push({icon:'🦆',name:'El Pato',desc:'Sin puntos... todavía'});
 
-  // 🍀 Suertudo — único en acertar un reto (o uno de menos del 20%)
-  retos.forEach(r=>{
-    if(!r.resuelto||!r.ganadores?.[player]) return;
-    const ganadores=Object.values(r.ganadores).filter(Boolean).length;
-    if(ganadores===1&&names.length>=5)
-      badges.push({icon:'🍀',name:'Suertudo',desc:'Único en acertar: '+r.titulo});
-  });
+  // 🍀 Suertudo — puntos muy por encima de la media con pocos exactos
+  if(pts.total>avgPts*1.3 && pts.exactos<2)
+    badges.push({icon:'🍀',name:'El Suertudo',desc:'Muchos puntos, pocos exactos — pura suerte'});
 
-  // 🪲 El Escarabajo — puesto 11, 12 o 13
-  if(myRank>=11) badges.push({icon:'🪲',name:'El Escarabajo',desc:'Pisado por todos (puesto '+myRank+'º)'});
-
-  // 💡 El Inspirado — tiene una propuesta publicada
-  const props=resultados.propuestasRetos||[];
-  if(props.some(pr=>pr.autor===player&&pr.estado==='publicado'))
+  // 💡 El Inspirado — propuso un reto publicado
+  const propuestas=resultados.propuestasRetos||[];
+  if(propuestas.some(pr=>pr.autor===player&&pr.estado==='publicado'))
     badges.push({icon:'💡',name:'El Inspirado',desc:'Propuso un reto que el admin publicó'});
+
+  // 🚀 El Cohete — más subidas en últimos snapshots
+  if(hist.length>=3){
+    const last=getRankAt(hist.length-1,player);
+    const prev=getRankAt(hist.length-3,player);
+    if(last&&prev&&(prev-last)>=3)
+      badges.push({icon:'🚀',name:'El Cohete',desc:'Ha subido '+( prev-last)+' puestos recientemente'});
+  }
+
+  // 📉 El Ascensor — más bajadas en últimos snapshots
+  if(hist.length>=3){
+    const last=getRankAt(hist.length-1,player);
+    const prev=getRankAt(hist.length-3,player);
+    if(last&&prev&&(last-prev)>=3)
+      badges.push({icon:'📉',name:'El Ascensor',desc:'Ha bajado '+(last-prev)+' puestos recientemente'});
+  }
+
+  // 🔥 En Llamas — 3+ exactos consecutivos en grupos
+  const gMatches=GROUP_MATCHES||[];
+  let streak=0, maxStreak=0;
+  for(const m of gMatches){
+    const pm=p.partidos?.[m.id]||{};
+    const rm=partidos[m.id];
+    if(rm&&rm.gl!=null&&pm.gl!=null&&Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv)){
+      streak++; maxStreak=Math.max(maxStreak,streak);
+    } else if(rm&&rm.gl!=null){ streak=0; }
+  }
+  if(maxStreak>=3) badges.push({icon:'🔥',name:'En Llamas',desc:'Racha de '+maxStreak+' exactos consecutivos'});
+
+  // 🧱 El Muro — nunca ha bajado del top 5 en todos los snapshots
+  if(hist.length>=2){
+    const alwaysTop5=hist.every(s=>{
+      const r=s.ranking?.[player]||99;
+      return r<=5;
+    });
+    if(alwaysTop5) badges.push({icon:'🧱',name:'El Muro',desc:'Nunca ha salido del top 5'});
+  }
+
+  // 💀 El Muerto — nunca ha subido del puesto 8
+  if(hist.length>=2 && names.length>8){
+    const alwaysBottom=hist.every(s=>{
+      const r=s.ranking?.[player]||99;
+      return r>=8;
+    });
+    if(alwaysBottom) badges.push({icon:'💀',name:'El Muerto',desc:'Nunca ha salido de los últimos puestos'});
+  }
+
+  // 🎰 El Tahúr — tiene respuesta en el reto con más puntos
+  if(retos&&retos.length){
+    const maxPtsReto=Math.max(...retos.filter(r=>r.activo).map(r=>r.pts||0));
+    const topReto=retos.find(r=>r.activo&&r.pts===maxPtsReto);
+    if(topReto&&(p.retos||{})[topReto.id])
+      badges.push({icon:'🎰',name:'El Tahúr',desc:'Apostó en el reto con más puntos en juego (+'+maxPtsReto+'pts)'});
+  }
+
+  // 👁️ El Vidente — acertó campeón desde el principio (campeón en pronósticos cerrados)
+  if(campeonReal && cmp(p.campeon,campeonReal) && p._locked)
+    badges.push({icon:'👁️',name:'El Vidente',desc:'Acertó el campeón antes de que empezara el torneo'});
+
+  // 🤝 El Gemelo — pronósticos casi idénticos a otro jugador (>80% coincidencia en grupos)
+  let bestMatch='', bestPct=0;
+  for(const other of names){
+    if(other===player) continue;
+    const op=pronosticos[other]||{};
+    const matches=gMatches.filter(m=>{
+      const pm=p.partidos?.[m.id]||{}, op2=op.partidos?.[m.id]||{};
+      return pm.gl!=null&&op2.gl!=null&&Number(pm.gl)===Number(op2.gl)&&Number(pm.gv)===Number(op2.gv);
+    });
+    const pct=gMatches.length?matches.length/gMatches.length:0;
+    if(pct>bestPct){bestPct=pct;bestMatch=other;}
+  }
+  if(bestPct>=0.5&&bestMatch)
+    badges.push({icon:'🤝',name:'El Gemelo',desc:'Sus pronósticos son '+Math.round(bestPct*100)+'% iguales a los de '+bestMatch});
+
+  // 😤 El Cabezota — único con ese campeón
+  if(p.campeon){
+    const othersSameCampeon=names.filter(n=>n!==player&&cmp((pronosticos[n]||{}).campeon,p.campeon));
+    if(othersSameCampeon.length===0)
+      badges.push({icon:'😤',name:'El Cabezota',desc:'El único que tiene a '+p.campeon+' como campeón'});
+  }
+
+  // 🎓 Experto — puntos totales muy por encima de la media
+  if(pts.total>avgPts*1.4 && names.length>3)
+    badges.push({icon:'🎓',name:'El Experto',desc:'Muy por encima de la media del grupo'});
+
+  // ── ADMIN BADGES (manual) ──────────────────────────────────────────────
+  const adminBadges=resultados.adminBadges||{};
+  const myAdminBadges=adminBadges[player]||[];
+  myAdminBadges.forEach(b=>{
+    badges.push({icon:b.icon||'🏅',name:b.name,desc:b.desc||'',isAdmin:true,hidden:b.hidden});
+  });
 
   return badges;
 }
@@ -3324,6 +3398,59 @@ function renderAdmin(){
 
   const retosHtml=propsHtml+retosFormHtml+retosCardsHtml;
 
+  // Admin Badges
+  const ADMIN_BADGE_PRESETS=[
+    {icon:'😭',name:'El Llorón',desc:'Siempre está quejándose'},
+    {icon:'🗣️',name:'El Bocazas',desc:'Habla mucho y acierta poco'},
+    {icon:'🤦',name:'El Cenizo',desc:'Siempre tiene mala suerte'},
+    {icon:'🙈',name:'El Negacionista',desc:'Nunca acepta que se equivocó'},
+    {icon:'🦥',name:'El Vago',desc:'Último en entregar pronósticos'},
+    {icon:'🎭',name:'El Actor',desc:'Dramático con cada resultado'},
+    {icon:'📣',name:'El Enterao',desc:'Siempre sabe más que nadie... en teoría'},
+    {icon:'🃏',name:'El Trilero',desc:'Cambia la historia según conviene'},
+  ];
+  const adminBadgesData=resultados.adminBadges||{};
+  const adminBadgesHtml=(()=>{
+  const proposals=(resultados.badgeProposals||[]).filter(p=>p.estado==='pendiente');
+  const propsSection=proposals.length?`<div style="background:rgba(139,47,201,.1);border:1px solid var(--purple);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:8px">📬 Propuestas de badges (${proposals.length})</div>
+    ${proposals.map((p,i)=>`<div style="background:var(--s2);border-radius:8px;padding:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px">${p.icon} <strong>${p.name}</strong> → ${p.target}</div>
+        <div style="font-size:11px;color:var(--t3)">${p.desc} · Por ${p.autor}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-xs btn-g" onclick="aprobarBadgeProposal(${i})">✓</button>
+        <button class="btn-xs btn-danger" onclick="rechazarBadgeProposal(${i})">✗</button>
+      </div>
+    </div>`).join('')}
+  </div>`:'';
+  return propsSection+`<div style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Asigna badges especiales a jugadores. Aparecen en su perfil con 🔒 hasta que los revelas.</div>
+      ${Object.keys(players).map(name=>{
+        const myBadges=adminBadgesData[name]||[];
+        return `<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-weight:700;font-size:13px">${players[name]?.avatar||'⚽'} ${name}</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${myBadges.map((b,bi)=>`<span style="background:var(--s1);border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer" onclick="removeAdminBadge('${esc(name)}',${bi})">${b.icon} ${b.name} ${b.hidden?'🔒':'👁️'} ✕</span>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <select class="fi" id="badge-preset-${esc(name)}" style="font-size:11px;padding:4px 6px;flex:1">
+              <option value="">— Badge predefinido —</option>
+              ${ADMIN_BADGE_PRESETS.map(b=>`<option value="${esc(b.icon+'|'+b.name+'|'+b.desc)}">${b.icon} ${b.name}</option>`).join('')}
+            </select>
+            <button class="btn-xs btn-s" onclick="addAdminBadgePreset('${esc(name)}')">＋</button>
+            <button class="btn-xs btn-p" onclick="addAdminBadgeCustom('${esc(name)}')">✏️ Libre</button>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:4px">
+            ${myBadges.map((b,bi)=>`<button class="btn-xs ${b.hidden?'btn-s':'btn-g'}" onclick="toggleAdminBadgeVisibility('${esc(name)}',${bi})">${b.hidden?'🔒 Revelar':'👁️ Ocultar'}</button>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;})();
+
   // Penalizaciones
   const penHtml=`
     <div class="field-row">
@@ -3429,7 +3556,10 @@ function renderAdmin(){
       <div class="res-row"><label>Bote manual (€)</label><input type="number" class="fi" id="ar-bote_manual" value="${res.bote_manual??''}" placeholder="Dejar vacío = automático"></div>
       <button class="btn btn-p btn-sm" onclick="guardarBote()">Guardar</button>
     </div></div>
-    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec12')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚠️ Penalizaciones</h3><span class="admin-sec-arrow" id="adminarrow-sec12">▼</span></div><div class="admin-sec-body" id="adminsec-sec12">
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec13')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🏅 Badges especiales</h3><span class="admin-sec-arrow" id="adminarrow-sec13">▼</span></div><div class="admin-sec-body" id="adminsec-sec13">
+      ${adminBadgesHtml}
+    </div>
+    <div class="admin-section" onclick="toggleAdminSec('sec12')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚠️ Penalizaciones</h3><span class="admin-sec-arrow" id="adminarrow-sec12">▼</span></div><div class="admin-sec-body" id="adminsec-sec12">
       ${penHtml}
     </div>
     <div class="admin-section danger-zone">
@@ -3457,6 +3587,90 @@ function renderAdmin(){
 }
 
 // ═══ ADMIN ACTIONS ════════════════════════════════════
+window.addAdminBadgePreset=async function(name){
+  const sel=document.getElementById('badge-preset-'+name);
+  if(!sel||!sel.value) return;
+  const [icon,bname,desc]=sel.value.split('|');
+  await addAdminBadge(name,{icon,name:bname,desc,hidden:true});
+};
+
+window.addAdminBadgeCustom=async function(name){
+  const icon=prompt('Emoji del badge:','😭');
+  if(!icon) return;
+  const bname=prompt('Nombre del badge:','El Llorón');
+  if(!bname) return;
+  const desc=prompt('Descripción:','Siempre se queja');
+  await addAdminBadge(name,{icon,name:bname,desc:desc||'',hidden:true});
+};
+
+window.addAdminBadge=async function(playerName,badge){
+  const res={...resultados};
+  if(!res.adminBadges) res.adminBadges={};
+  if(!res.adminBadges[playerName]) res.adminBadges[playerName]=[];
+  res.adminBadges[playerName].push(badge);
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('🏅 Badge añadido');
+  renderAdmin();
+};
+
+window.removeAdminBadge=async function(playerName,idx){
+  const res={...resultados};
+  if(!res.adminBadges?.[playerName]) return;
+  res.adminBadges[playerName].splice(idx,1);
+  await setDoc(doc(db,'meta','resultados'),res);
+  renderAdmin();
+};
+
+window.toggleAdminBadgeVisibility=async function(playerName,idx){
+  const res={...resultados};
+  if(!res.adminBadges?.[playerName]) return;
+  res.adminBadges[playerName][idx].hidden=!res.adminBadges[playerName][idx].hidden;
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast(res.adminBadges[playerName][idx].hidden?'🔒 Badge ocultado':'👁️ Badge revelado');
+  renderAdmin();
+};
+
+window.proponerBadge=async function(){
+  const target=document.getElementById('prop-badge-player')?.value;
+  const icon=document.getElementById('prop-badge-icon')?.value.trim();
+  const name=document.getElementById('prop-badge-name')?.value.trim();
+  const desc=document.getElementById('prop-badge-desc')?.value.trim();
+  if(!target||!icon||!name){showToast('❌ Rellena todos los campos');return;}
+  const res={...resultados};
+  if(!res.badgeProposals) res.badgeProposals=[];
+  res.badgeProposals.push({target,icon,name,desc,autor:currentUser,ts:new Date().toISOString(),estado:'pendiente'});
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('📬 Propuesta enviada al admin');
+  document.getElementById('prop-badge-icon').value='';
+  document.getElementById('prop-badge-name').value='';
+  document.getElementById('prop-badge-desc').value='';
+};
+
+window.aprobarBadgeProposal=async function(idx){
+  const res={...resultados};
+  const proposals=res.badgeProposals||[];
+  const p=proposals[idx];
+  if(!p) return;
+  if(!res.adminBadges) res.adminBadges={};
+  if(!res.adminBadges[p.target]) res.adminBadges[p.target]=[];
+  res.adminBadges[p.target].push({icon:p.icon,name:p.name,desc:p.desc,hidden:true,autor:p.autor});
+  proposals[idx].estado='aprobado';
+  res.badgeProposals=proposals;
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('✅ Badge aprobado y asignado');
+  renderAdmin();
+};
+
+window.rechazarBadgeProposal=async function(idx){
+  const res={...resultados};
+  const proposals=res.badgeProposals||[];
+  if(proposals[idx]) proposals[idx].estado='rechazado';
+  res.badgeProposals=proposals;
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('✗ Propuesta rechazada');
+  renderAdmin();
+};
+
 window.enviarAviso=async function(){
   const msg=document.getElementById('av-msg').value.trim();
   if(!msg) return;
