@@ -3527,7 +3527,7 @@ window.guardarBote=async function(){
 window.publicarPropuesta=async function(idx){
   const props=[...(resultados.propuestasRetos||[])];
   const p=props[idx];
-  const newReto={id:'reto_'+Date.now(),titulo:p.titulo,desc:p.desc,pts:p.pts,tipo:p.tipo,activo:true,ganadores:{},opciones:[]};
+  const newReto={id:'reto_'+Date.now(),titulo:p.titulo,desc:p.desc,pts:p.pts,tipo:p.tipo,ganar:p.ganar||'exacto',deadline:p.deadline||'',opciones:p.opciones||[],activo:true,cerrado:false,resuelto:false,ganadores:{},autor:p.autor||''};
   const newRetos=[...retos,newReto];
   await setDoc(doc(db,'meta','retos'),{list:newRetos});
   props[idx].estado='publicado';
@@ -3583,9 +3583,11 @@ window.editarPropuesta=function(idx){
     </div>
     <div class="field"><label>Opciones (separadas por comas)</label>
       <input class="fi" type="text" id="ep-opciones" value="${esc((p.opciones||[]).join(', '))}"></div>
-    <div style="background:var(--s2);border-radius:8px;padding:8px;font-size:11px;color:var(--t3);margin-top:4px">
-      Propuesto por <strong style="color:var(--t2)">${esc(p.autor||'?')}</strong>
-    </div>
+    <div class="field"><label>Propuesto por</label>
+      <select class="fi" id="ep-autor">
+        <option value="">— Ninguno —</option>
+        ${Object.keys(players).map(n=>`<option value="${n}" ${cmp(p.autor,n)?'selected':''}>${players[n]?.avatar||'⚽'} ${n}</option>`).join('')}
+      </select></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-g btn-w" onclick="guardarPropuestaEditada(${idx},true)">✓ Guardar y publicar</button>
       <button class="btn btn-s" onclick="guardarPropuestaEditada(${idx},false)">💾 Solo guardar</button>
@@ -3623,7 +3625,7 @@ window.guardarPropuestaEditada=async function(idx,publicar){
       cerrado:false,
       resuelto:false,
       ganadores:{},
-      // Drop autor — not stored in published reto
+      autor:document.getElementById('ep-autor')?.value||p.autor||'',
     }];
     await setDoc(doc(db,'meta','retos'),{list:newRetos});
     const res={...resultados,propuestasRetos:props};
@@ -3707,6 +3709,11 @@ window.editarReto=function(idx){
     <div style="background:var(--s2);border-radius:8px;padding:10px;margin:10px 0;font-size:12px;color:var(--t2)">
       ⚠️ Las respuestas ya enviadas (${Object.keys(players).filter(n=>(pronosticos[n]||{}).retos?.[r.id]).length} jugadores) se conservan.
     </div>
+    <div class="field"><label>Propuesto por (opcional)</label>
+      <select class="fi" id="er-autor">
+        <option value="">— Ninguno —</option>
+        ${Object.keys(players).map(n=>`<option value="${n}" ${cmp(r.autor,n)?'selected':''}>${players[n]?.avatar||'⚽'} ${n}</option>`).join('')}
+      </select></div>
     <button class="btn btn-p btn-w" onclick="guardarEdicionReto(${idx})">💾 Guardar cambios</button>`;
   document.getElementById('detail-modal').style.display='flex';
 };
@@ -3719,6 +3726,7 @@ window.guardarEdicionReto=async function(idx){
     ...r,
     titulo:document.getElementById('er-titulo').value.trim(),
     desc:document.getElementById('er-desc').value.trim(),
+    autor:document.getElementById('er-autor')?.value.trim()||r.autor||'',
     pts:Number(document.getElementById('er-pts').value)||r.pts,
     deadline:document.getElementById('er-deadline').value,
     tipo:document.getElementById('er-tipo').value,
