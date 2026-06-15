@@ -2312,6 +2312,7 @@ function renderRetos(){
         <div style="flex:1">
           <div style="font-size:16px;font-weight:800;color:var(--t1);margin-bottom:4px">${r.titulo}</div>
           ${r.desc?`<div style="font-size:12px;color:var(--t2);line-height:1.5">${r.desc}</div>`:''}
+          ${r.autor?`<div style="font-size:11px;color:var(--purple);margin-top:3px;font-style:italic">💡 Propuesto por ${r.autor}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="badge badge-gold" style="font-size:13px;font-weight:800">+${r.pts} pts</span>
@@ -3547,26 +3548,95 @@ window.rechazarPropuesta=async function(idx){
 window.editarPropuesta=function(idx){
   const props=(resultados.propuestasRetos||[]);
   const p=props[idx];
+  if(!p) return;
+  // Format deadline for datetime-local input
+  const dlVal=p.deadline?new Date(p.deadline).toISOString().slice(0,16):'';
   document.getElementById('modal-title').textContent='✏️ Editar propuesta';
   document.getElementById('modal-body').innerHTML=`
     <div class="field"><label>Título</label><input class="fi" type="text" id="ep-titulo" value="${esc(p.titulo)}"></div>
     <div class="field"><label>Descripción</label><input class="fi" type="text" id="ep-desc" value="${esc(p.desc||'')}"></div>
     <div class="field-row">
-      <div class="field"><label>Puntos</label><input class="fi" type="number" id="ep-pts" value="${p.pts}"></div>
+      <div class="field"><label>Puntos</label><input class="fi" type="number" id="ep-pts" value="${p.pts||10}" min="1"></div>
       <div class="field"><label>Tipo</label>
         <select class="fi" id="ep-tipo">
           <option value="texto" ${p.tipo==='texto'?'selected':''}>Texto libre</option>
+          <option value="equipos" ${p.tipo==='equipos'?'selected':''}>Desplegable equipos</option>
+          <option value="jugadores" ${p.tipo==='jugadores'?'selected':''}>Desplegable jugadores</option>
           <option value="sino" ${p.tipo==='sino'?'selected':''}>Sí / No</option>
           <option value="numero" ${p.tipo==='numero'?'selected':''}>Número</option>
-          <option value="equipos" ${p.tipo==='equipos'?'selected':''}>Equipos</option>
+          <option value="rango" ${p.tipo==='rango'?'selected':''}>Rango numérico</option>
+          <option value="multiple" ${p.tipo==='multiple'?'selected':''}>Múltiple</option>
         </select>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button class="btn btn-p" onclick="guardarEdicionPropuesta(${idx})">💾 Guardar y publicar</button>
-      <button class="btn btn-s" onclick="closeModal('detail-modal')">Cancelar</button>
+    <div class="field-row">
+      <div class="field"><label>Ganar por</label>
+        <select class="fi" id="ep-ganar">
+          <option value="exacto" ${(p.ganar||'exacto')==='exacto'?'selected':''}>Exacto</option>
+          <option value="cercano" ${p.ganar==='cercano'?'selected':''}>Más cercano</option>
+          <option value="individual" ${p.ganar==='individual'?'selected':''}>Individual</option>
+        </select>
+      </div>
+      <div class="field"><label>Fecha límite</label>
+        <input class="fi" type="datetime-local" id="ep-deadline" value="${dlVal}">
+      </div>
+    </div>
+    <div class="field"><label>Opciones (separadas por comas)</label>
+      <input class="fi" type="text" id="ep-opciones" value="${esc((p.opciones||[]).join(', '))}"></div>
+    <div style="background:var(--s2);border-radius:8px;padding:8px;font-size:11px;color:var(--t3);margin-top:4px">
+      Propuesto por <strong style="color:var(--t2)">${esc(p.autor||'?')}</strong>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-g btn-w" onclick="guardarPropuestaEditada(${idx},true)">✓ Guardar y publicar</button>
+      <button class="btn btn-s" onclick="guardarPropuestaEditada(${idx},false)">💾 Solo guardar</button>
+      <button class="btn btn-danger" onclick="closeModal('detail-modal')">✗ Cancelar</button>
     </div>`;
   document.getElementById('detail-modal').style.display='flex';
+};
+
+window.guardarPropuestaEditada=async function(idx,publicar){
+  const props=[...(resultados.propuestasRetos||[])];
+  const p={...props[idx]};
+  p.titulo=document.getElementById('ep-titulo').value.trim()||p.titulo;
+  p.desc=document.getElementById('ep-desc').value.trim();
+  p.pts=Number(document.getElementById('ep-pts').value)||10;
+  p.tipo=document.getElementById('ep-tipo').value;
+  p.ganar=document.getElementById('ep-ganar').value;
+  const dl=document.getElementById('ep-deadline').value;
+  p.deadline=dl?new Date(dl).toISOString():'';
+  const opRaw=document.getElementById('ep-opciones').value;
+  p.opciones=opRaw?opRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
+  
+  if(publicar){
+    // Publish as new reto — remove from proposals, add to retos
+    props.splice(idx,1);
+    const newRetos=[...retos,{
+      id:'reto_'+Date.now(),
+      titulo:p.titulo,
+      desc:p.desc,
+      pts:p.pts,
+      tipo:p.tipo,
+      ganar:p.ganar,
+      deadline:p.deadline,
+      opciones:p.opciones,
+      activo:true,
+      cerrado:false,
+      resuelto:false,
+      ganadores:{},
+      // Drop autor — not stored in published reto
+    }];
+    await setDoc(doc(db,'meta','retos'),{list:newRetos});
+    const res={...resultados,propuestasRetos:props};
+    await setDoc(doc(db,'meta','resultados'),res);
+    showToast('✅ Propuesta publicada como reto');
+  } else {
+    props[idx]=p;
+    const res={...resultados,propuestasRetos:props};
+    await setDoc(doc(db,'meta','resultados'),res);
+    showToast('💾 Propuesta guardada');
+  }
+  closeModal('detail-modal');
+  renderAdmin();
 };
 
 window.guardarEdicionPropuesta=async function(idx){
