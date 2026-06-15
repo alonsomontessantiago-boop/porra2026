@@ -50,7 +50,7 @@ html,body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-syst
 .hamburger-btn:hover{background:rgba(255,255,255,.1)}
 .nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;backdrop-filter:blur(2px)}
 .nav-overlay.open{display:block}
-.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:var(--s1);border-left:1px solid var(--brd);z-index:151;transition:right .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;padding:16px 0}
+.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:var(--s1);border-left:1px solid var(--brd);z-index:151;transition:right .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;padding-top:16px}
 .nav-drawer.open{right:0}
 .nav-drawer-header{padding:12px 16px 16px;border-bottom:1px solid var(--brd);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .nav-drawer-header h3{font-size:15px;font-weight:800;color:var(--gold)}
@@ -1015,7 +1015,8 @@ function listenMeta(){
   onSnapshot(doc(db,"meta","resultados"),d=>{
     resultados=d.exists()?d.data():{};
     if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); renderEvolucion();
-  fixStickyOffsets(); }
+  fixStickyOffsets();
+  if(!window._firstLoad){window._firstLoad=true;window.scrollTo(0,0);window.addEventListener('resize',fixStickyOffsets);} }
     if(isActive('pronosticos')) renderPronosticos();
     if(isActive('normas')) renderNormas();
     if(isActive('bracket')) renderBracket();
@@ -1416,10 +1417,20 @@ function fixStickyOffsets(){
   const header=document.querySelector('.header');
   const userBar=document.querySelector('.user-bar');
   if(!header||!userBar) return;
-  const hH=header.offsetHeight;
-  // userbar stacks naturally after header - both sticky top:0 in DOM order is fine
-  // For comparador thead, set CSS variable
-  document.documentElement.style.setProperty('--sticky-top', (hH+userBar.offsetHeight)+'px');
+  const totalH=header.offsetHeight+userBar.offsetHeight;
+  document.documentElement.style.setProperty('--sticky-top', totalH+'px');
+  // Fix drawer to start below sticky header+userbar
+  const drawer=document.querySelector('.nav-drawer');
+  if(drawer){
+    drawer.style.top=totalH+'px';
+    drawer.style.height='calc(100% - '+totalH+'px)';
+  }
+  // Fix overlay too
+  const overlay=document.querySelector('.nav-overlay');
+  if(overlay){
+    overlay.style.top=totalH+'px';
+    overlay.style.height='calc(100% - '+totalH+'px)';
+  }
 }
 
 function renderRanking(){
@@ -4607,35 +4618,34 @@ window.generarCaptura=async function(){
     ctx.stroke();
     ctx.shadowBlur=0;
 
-    // Position number on bar
-    ctx.fillStyle=col_;
-    ctx.font=`bold ${rankIdx===0?36:28}px system-ui,Arial`;
-    ctx.textAlign='center';
-    ctx.fillText(rankIdx===0?'1º':rankIdx===1?'2º':'3º',cx,barY+barH/2+10);
-
     // Avatar circle above bar
-    const circR=rankIdx===0?28:22;
-    const circY=barY-circR-8;
+    const circR=rankIdx===0?30:24;
+    const circY=barY-circR-10;
     ctx.shadowColor=col_;
-    ctx.shadowBlur=10;
+    ctx.shadowBlur=12;
     ctx.beginPath();ctx.arc(cx,circY,circR,0,Math.PI*2);
-    ctx.fillStyle='rgba(10,5,30,.8)';ctx.fill();
-    ctx.strokeStyle=col_;ctx.lineWidth=2.5;ctx.stroke();
+    ctx.fillStyle='rgba(10,5,30,.85)';ctx.fill();
+    ctx.strokeStyle=col_;ctx.lineWidth=3;ctx.stroke();
     ctx.shadowBlur=0;
-    ctx.font=`${circR*1.3}px system-ui,Arial`;
+    // Position badge on circle
+    ctx.fillStyle=col_;
+    ctx.font=`bold ${rankIdx===0?18:15}px system-ui,Arial`;
     ctx.textAlign='center';
-    ctx.fillText(pl.avatar||'⚽',cx,circY+circR*0.45);
+    ctx.fillText(rankIdx===0?'1º':rankIdx===1?'2º':'3º',cx,circY-circR+13);
+    // Avatar emoji
+    ctx.font=`${circR*1.1}px system-ui,Arial`;
+    ctx.fillText(pl.avatar||'⚽',cx,circY+circR*0.5);
 
-    // Name
+    // Name on bar - top area
     ctx.fillStyle='white';
-    ctx.font=`bold ${rankIdx===0?15:13}px system-ui,Arial`;
+    ctx.font=`bold ${rankIdx===0?14:12}px system-ui,Arial`;
     ctx.textAlign='center';
-    ctx.fillText(r.n,cx,barY+barH-26);
+    ctx.fillText(r.n,cx,barY+20);
 
-    // Points
+    // Points - bottom of bar
     ctx.fillStyle='#4ade80';
-    ctx.font=`bold ${rankIdx===0?17:14}px system-ui,Arial`;
-    ctx.fillText(r.p.total+' pts',cx,barY+barH-8);
+    ctx.font=`bold ${rankIdx===0?16:14}px system-ui,Arial`;
+    ctx.fillText(r.p.total+' pts',cx,barY+barH-10);
   });
 
   // ── Table 4th onwards ────────────────────────────────────────────────
