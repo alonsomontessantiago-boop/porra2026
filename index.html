@@ -1014,7 +1014,8 @@ async function loadAllPronos(){
 function listenMeta(){
   onSnapshot(doc(db,"meta","resultados"),d=>{
     resultados=d.exists()?d.data():{};
-    if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); renderEvolucion(); }
+    if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); renderEvolucion();
+  fixStickyOffsets(); }
     if(isActive('pronosticos')) renderPronosticos();
     if(isActive('normas')) renderNormas();
     if(isActive('bracket')) renderBracket();
@@ -1410,6 +1411,17 @@ window.toggleAvatarPicker=function(){
 function getRankFromSorted(name,sorted){ return sorted.findIndex(x=>x.n===name)+1; }
 
 // ═══ RENDER: RANKING ════════════════════════════════════
+
+function fixStickyOffsets(){
+  const header=document.querySelector('.header');
+  const userBar=document.querySelector('.user-bar');
+  if(!header||!userBar) return;
+  const hH=header.offsetHeight;
+  // userbar stacks naturally after header - both sticky top:0 in DOM order is fine
+  // For comparador thead, set CSS variable
+  document.documentElement.style.setProperty('--sticky-top', (hH+userBar.offsetHeight)+'px');
+}
+
 function renderRanking(){
   // Bote
   const numPlayers=Object.keys(players).length;
@@ -4059,11 +4071,11 @@ function renderComparador(){
   }
 
   function headerRow(label){
-    return `<tr><th colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:11px;font-weight:700;padding:6px 8px;text-align:left">${label}</th></tr>`;
+    return `<tr><th colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:11px;font-weight:700;padding:6px 8px;text-align:left;position:sticky;left:0">${label}</th></tr>`;
   }
 
   function dataRow(label, key, isVisible=true){
-    return `<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2)">${label}</td>
+    return `<tr><td style="font-size:11px;color:var(--t2);padding:6px 8px;white-space:nowrap;background:var(--s2);position:sticky;left:0;z-index:5;box-shadow:2px 0 4px rgba(0,0,0,.3)">${label}</td>
       ${selectedPlayers.map(n=>cell((pronosticos[n]||{})[key], key, isVisible)).join('')}</tr>`;
   }
 
@@ -4225,11 +4237,11 @@ function renderComparador(){
       <table style="width:100%;border-collapse:collapse;min-width:${200+selectedPlayers.length*110}px">
         <thead>
           <tr style="background:var(--s1)">
-            <th style="padding:8px;font-size:11px;color:var(--t3);text-align:left;min-width:130px;border-bottom:2px solid var(--gold);position:sticky;top:0;background:var(--s1);z-index:11;box-shadow:0 2px 6px rgba(0,0,0,.4)">Pronóstico</th>
+            <th style="padding:8px;font-size:11px;color:var(--t3);text-align:left;min-width:130px;border-bottom:2px solid var(--gold);position:sticky;top:var(--sticky-top,0);background:var(--s1);z-index:13;box-shadow:2px 2px 6px rgba(0,0,0,.5)">Pronóstico</th>
             ${selectedPlayers.map(n=>{
               const pts=calcPoints(n).total;
               const rank=getRank(n);
-              return `<th style="padding:8px 4px;text-align:center;min-width:100px;border-bottom:2px solid var(--gold);cursor:pointer;position:sticky;top:0;background:var(--s1);z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.4)" onclick="verJugador('${esc(n)}')">
+              return `<th style="padding:8px 4px;text-align:center;min-width:100px;border-bottom:2px solid var(--gold);cursor:pointer;position:sticky;top:var(--sticky-top,0);background:var(--s1);z-index:12;box-shadow:0 2px 6px rgba(0,0,0,.4)" onclick="verJugador('${esc(n)}')">
                 <div style="font-size:22px;line-height:1">${players[n]?.avatar||'⚽'}</div>
                 <div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:3px">${n}</div>
                 <div style="font-size:10px;color:var(--t3)">${rank}º · ${pts}pts</div>
