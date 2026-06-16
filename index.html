@@ -2789,6 +2789,11 @@ window.generarCapturaRetos=function(){
 };
 
 window.guardarRetoDirecto=async function(retoId, valor){
+  const r=retos.find(function(x){return x.id===retoId;});
+  if(r){
+    if(r.cerrado){showToast('🔒 Este reto está cerrado');return;}
+    if(r.deadline&&new Date()>new Date(r.deadline)){showToast('⏰ El plazo de este reto ha terminado');return;}
+  }
   const p2={...pronosticos[currentUser]||{}};
   if(!p2.retos) p2.retos={};
   p2.retos[retoId]=valor;
@@ -2799,13 +2804,20 @@ window.guardarRetoDirecto=async function(retoId, valor){
 
 
 window.guardarReto=async function(retoId){
+  const r=retos.find(function(x){return x.id===retoId;});
+  if(r){
+    if(r.cerrado){showToast('🔒 Este reto está cerrado');return;}
+    if(r.deadline&&new Date()>new Date(r.deadline)){showToast('⏰ El plazo de este reto ha terminado');return;}
+  }
   const el=document.getElementById('reto-'+retoId);
   if(!el) return;
+  const val=el.value.trim();
+  if(!val){showToast('⚠️ Introduce una respuesta');return;}
   const p={...pronosticos[currentUser]||{}};
   if(!p.retos) p.retos={};
-  p.retos[retoId]=el.value.trim();
+  p.retos[retoId]=val;
   await savePronostico(currentUser,p);
-  alert('✅ Respuesta guardada');
+  showToast('✅ Respuesta guardada');
 };
 
 // ═══ BADGES ENGINE ═══════════════════════════════════════════════════
