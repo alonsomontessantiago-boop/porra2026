@@ -975,6 +975,24 @@ function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.
 
 // Migrar puntos viejos a nuevos valores si el admin no los ha tocado manualmente
 // o si tienen los valores antiguos exactos
+window.normalizarPuntosRetos=function(){
+  if(!isAdmin) return;
+  if(!confirm('¿Normalizar puntos de TODOS los retos?\n+20→+10 · +15→+5 · +10→+3\nEsto es retroactivo.')) return;
+  const mapa={20:10, 15:5, 10:3};
+  const nuevosRetos=retos.map(function(r){
+    var newPts=mapa[r.pts];
+    if(newPts!=null) return Object.assign({},r,{pts:newPts});
+    return r;
+  });
+  setDoc(doc(db,'meta','retos'),{list:nuevosRetos})
+    .then(function(){
+      calcPoints._cache={};
+      showToast('✅ Puntos de retos normalizados');
+      renderAdmin();
+      renderRanking();
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
 window.aplicarNuevosPuntos=function(){
   if(!confirm('¿Aplicar los nuevos valores de puntos? Esto afecta a TODOS los jugadores retroactivamente.')) return;
   const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
@@ -3877,6 +3895,11 @@ function renderAdmin(){
         <input class="fi" type="text" id="reto-opciones" placeholder="Ej: España, Francia, Brasil"></div>
       <div class="field"><label>Fecha límite</label><input class="fi" type="datetime-local" id="reto-deadline"></div>
       <button class="btn btn-p btn-sm" onclick="crearReto()">Lanzar reto</button>
+      <div style="margin-top:14px;padding:10px;background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);border-radius:8px">
+        <div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:4px">⚡ Normalizar puntos de todos los retos</div>
+        <div style="font-size:11px;color:var(--t2);margin-bottom:8px">+20→+10 · +15→+5 · +10→+3</div>
+        <button onclick="normalizarPuntosRetos()" style="padding:6px 12px;border-radius:6px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:#f87171;font-size:12px;font-weight:700;cursor:pointer">Aplicar a todos los retos</button>
+      </div>
   </div>`;
 
   // Reto cards — collapsible with admin tabs
