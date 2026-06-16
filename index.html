@@ -2311,14 +2311,22 @@ function renderRetos(){
   const el=document.getElementById('retos-content');
   const p=pronosticos[currentUser]||{};
   const res=resultados||{};
-  const activeRetos=retos.filter(r=>r.activo).sort((a,b)=>{
+  const allActiveRetos=retos.filter(r=>r.activo);
+  const retosTab=window._retosTab||'activos';
+  const activeRetos=allActiveRetos.filter(r=>{
+    const cerrado=r.cerrado||new Date()>new Date(r.deadline);
+    const myResp=(p.retos||{})[r.id];
+    const ganado=r.resuelto&&r.ganadores?.[currentUser];
+    const fallado=r.resuelto&&myResp&&!r.ganadores?.[currentUser];
+    if(retosTab==='activos') return !r.resuelto;
+    if(retosTab==='acertados') return ganado;
+    if(retosTab==='fallados') return fallado;
+    return true;
+  }).sort((a,b)=>{
     const aCerrado=a.cerrado||new Date()>new Date(a.deadline);
     const bCerrado=b.cerrado||new Date()>new Date(b.deadline);
-    const aResuelto=a.resuelto===true;
-    const bResuelto=b.resuelto===true;
-    // Order: open(0) → cerrado sin resolver(1) → resuelto(2)
-    const aScore=!aCerrado?0:aResuelto?2:1;
-    const bScore=!bCerrado?0:bResuelto?2:1;
+    const aScore=!aCerrado?0:1;
+    const bScore=!bCerrado?0:1;
     return aScore-bScore;
   });
 
@@ -2331,7 +2339,21 @@ function renderRetos(){
   const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div>';
 
 
-  el.innerHTML=topBtns+activeRetos.map(r=>{
+  // Filter tab counts
+  const nActivos=allActiveRetos.filter(r=>!r.resuelto).length;
+  const nAcertados=allActiveRetos.filter(r=>r.resuelto&&r.ganadores?.[currentUser]).length;
+  const nFallados=allActiveRetos.filter(r=>r.resuelto&&(p.retos||{})[r.id]&&!r.ganadores?.[currentUser]).length;
+  function makeRetoTab(id,label,count,active){
+    var cls=active?'btn-p':'btn-s';
+    var cnt=count?(' ('+count+')'):'';
+    return '<button class="btn '+cls+' btn-sm" data-rt="'+id+'" onclick="setRetosTab(this.dataset.rt)">'+label+cnt+'</button>';
+  }
+  const filterTabs='<div style="display:flex;gap:6px;margin-bottom:12px">'
+    +makeRetoTab('activos','🎯 Activos',nActivos,retosTab==='activos')
+    +makeRetoTab('acertados','✅ Acertados',nAcertados,retosTab==='acertados')
+    +makeRetoTab('fallados','❌ Fallados',nFallados,retosTab==='fallados')
+    +'</div>';
+  el.innerHTML=topBtns+filterTabs+activeRetos.map(r=>{
     const myRespuesta=(p.retos||{})[r.id];
     const haGanado=r.ganadores?.[currentUser];
     const cerrado=r.cerrado||new Date()>new Date(r.deadline);
@@ -3357,8 +3379,14 @@ function renderAdmin(){
       <button class="btn btn-p btn-sm" onclick="crearReto()">Lanzar reto</button>
   </div>`;
 
-  // Reto cards — collapsible
-  const retosCardsHtml=retos.map(function(r,i){
+  // Reto cards — collapsible with admin tabs
+  const adminRetosTab=window._adminRetosTab||'activos';
+  const retosActivos=retos.filter(r=>r.activo&&!r.resuelto);
+  const retosResueltos=retos.filter(r=>r.activo&&r.resuelto);
+  const retosInactivos=retos.filter(r=>!r.activo);
+  const nPropuestas=(resultados.propuestasRetos||[]).filter(p=>p.estado==='pendiente').length;
+
+  function buildRetoCard(r,i){
     const nResp=Object.keys(players).filter(function(n){return !!(pronosticos[n]||{}).retos?.[r.id];}).length;
     const nTotal=Object.keys(players).length;
     const statusColor=r.resuelto?'#4ade80':r.cerrado?'var(--t3)':r.activo?'var(--purple)':'#f87171';
@@ -3367,6 +3395,7 @@ function renderAdmin(){
     const respItems=Object.keys(players).map(function(name){
       const resp=(pronosticos[name]||{}).retos?.[r.id];
       const ganador=!!(r.ganadores&&r.ganadores[name]);
+      const safeName=name.replace(/'/g,"\\'");
       return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0">'
         +'<input type="checkbox"'+(ganador?' checked':'')
         +' data-ri="'+i+'" data-rn="'+name.replace(/"/g,'&quot;')+'" onchange="marcarGanadorReto(this.dataset.ri,this.dataset.rn,this.checked)">'
@@ -3375,7 +3404,7 @@ function renderAdmin(){
         +'</label>';
     }).join('');
     return '<div style="background:var(--s1);border:1px solid var(--brd);border-radius:10px;margin-bottom:6px;overflow:hidden">'
-      +'<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer" data-rid='+rid+' onclick="var b=document.getElementById(this.dataset.rid);b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+      +'<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer" data-rid="'+rid+'" onclick="toggleRetoCard(this.dataset.rid)">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.titulo+'</div>'
       +'<div style="font-size:10px;margin-top:2px"><span style="color:'+statusColor+'">'+statusLabel+'</span> · '+nResp+'/'+nTotal+' resp · +'+r.pts+'pts</div>'
@@ -3394,9 +3423,29 @@ function renderAdmin(){
       +respItems
       +'<button class="btn btn-p btn-sm" style="margin-top:8px" onclick="guardarGanadoresReto('+i+')">💾 Guardar ganadores</button>'
       +'</div></div>';
-  }).join('');
+  }
 
-  const retosHtml=propsHtml+retosFormHtml+retosCardsHtml;
+  function makeAdminRetoTab(id,label,count,active){
+    var cls=active?'btn-p':'btn-s';
+    var cnt=count?(' ('+count+')'):'';
+    return '<button class="btn '+cls+' btn-xs" data-art="'+id+'" onclick="setAdminRetosTab(this.dataset.art)">'+label+cnt+'</button>';
+  }
+  const adminRetosTabs='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
+    +makeAdminRetoTab('activos','🎯 Activos',retosActivos.length,adminRetosTab==='activos')
+    +makeAdminRetoTab('resueltos','✅ Resueltos',retosResueltos.length,adminRetosTab==='resueltos')
+    +makeAdminRetoTab('propuestas','📬 Propuestas',nPropuestas,adminRetosTab==='propuestas')
+    +'</div>';
+
+  let retosCardsHtml='';
+  if(adminRetosTab==='activos'){
+    retosCardsHtml=retosActivos.concat(retosInactivos).map(function(r){return buildRetoCard(r,retos.indexOf(r));}).join('');
+  } else if(adminRetosTab==='resueltos'){
+    retosCardsHtml=retosResueltos.map(function(r){return buildRetoCard(r,retos.indexOf(r));}).join('');
+  } else {
+    retosCardsHtml=propsHtml;
+  }
+
+    const retosHtml=(adminRetosTab==='propuestas'?'':adminRetosTabs)+retosFormHtml+(adminRetosTab==='propuestas'?propsHtml:retosCardsHtml);
 
   // Admin Badges
   const ADMIN_BADGE_PRESETS=[
@@ -3670,6 +3719,11 @@ window.rechazarBadgeProposal=async function(idx){
   showToast('✗ Propuesta rechazada');
   renderAdmin();
 };
+
+window.toggleRetoCard=function(rid){var el=document.getElementById(rid);if(el)el.style.display=el.style.display==='none'?'block':'none';};
+
+window.setRetosTab=function(tab){window._retosTab=tab;renderRetos();};
+window.setAdminRetosTab=function(tab){window._adminRetosTab=tab;renderAdmin();};
 
 window.enviarAviso=async function(){
   const msg=document.getElementById('av-msg').value.trim();
