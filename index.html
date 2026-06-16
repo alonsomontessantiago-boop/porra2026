@@ -1561,7 +1561,7 @@ function renderRanking(){
             <div class="player-avatar ${borderClass}" style="width:30px;height:30px;font-size:15px;flex-shrink:0">${pl.avatar||'⚽'}</div>
             <div style="min-width:0">
               <div style="font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px">${n}</div>
-              ${(()=>{const bs=calcBadges(n,ranked);return bs.length?`<div style="font-size:10px;margin-top:1px">${bs.slice(0,2).map(b=>b.icon).join(' ')}</div>`:'';})()}
+              ${(()=>{const bs=calcBadges(n);return bs.length?`<div style="font-size:10px;margin-top:1px">${bs.slice(0,2).map(b=>b.icon).join(' ')}</div>`:'';})()}
               <div class="fill-bar" style="width:50px;margin-top:2px"><div class="fill-bar-inner" style="width:${pc.pct}%"></div></div>
             </div>
           </div>
@@ -1605,7 +1605,7 @@ window.showPlayerDetail=function(name){
   const rank=getRank(name);
   const medals=['🥇','🥈','🥉'];
   const rankStr=(medals[rank-1]||rank+'º')+' lugar';
-  const badges=calcBadges(name,null);
+  const badges=calcBadges(name);
 
   // Quick summary modal
   document.getElementById('modal-title').textContent='';
@@ -1638,7 +1638,7 @@ window.verJugador=function(name){
   const rank=getRank(name);
   const medals=['🥇','🥈','🥉'];
   const rankStr=medals[rank-1]||rank+'º';
-  const badges=calcBadges(name,null);
+  const badges=calcBadges(name);
   const pc=pronosCount(name);
   const isSelf=name===currentUser;
   const isVisible=isSelf||isAdmin||(pr._locked);
@@ -2652,9 +2652,9 @@ window.guardarReto=async function(retoId){
 };
 
 // ═══ BADGES ENGINE ═══════════════════════════════════════════════════
-function calcBadges(player, allPlayers, pronosticos, resultados, partidos, retos){
+function calcBadges(player){
   const badges=[];
-  const names=allPlayers?Object.keys(allPlayers):[];
+  const names=Object.keys(players);
   const p=pronosticos[player]||{};
   const hist=resultados.historialRanking||[];
   
@@ -2974,7 +2974,7 @@ function renderStats(){
     <div class="card">
       <div class="card-title">🏅 Badges especiales</div>
       ${names.map(n=>{
-        const badges=calcBadges(n,ranked);
+        const badges=calcBadges(n);
         if(!badges.length) return '';
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--brd2);flex-wrap:wrap">
           <span style="font-size:13px;min-width:80px">${players[n]?.avatar||'⚽'} ${n}</span>
@@ -4314,7 +4314,7 @@ function renderJugadores(){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
     ${ranked.map(({n,p},i)=>{
       const pl=players[n]||{};
-      const badges=calcBadges(n,ranked);
+      const badges=calcBadges(n);
       const borderColor=i===0?'var(--gold)':i===1?'#c0c0c0':i===2?'#cd7f32':'var(--brd)';
       return `<div style="background:var(--s1);border:1px solid ${borderColor};border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="verJugador('${esc(n)}')">
         <div style="font-size:18px;font-weight:800;color:var(--t3);min-width:28px">${medals[i]||i+1+'º'}</div>
@@ -6039,7 +6039,7 @@ window.showPlayerDetail=function(name){
   const rank=getRank(name);
   const medals=['🥇','🥈','🥉'];
   const rankStr=(medals[rank-1]||rank+'º')+' lugar';
-  const badges=calcBadges(name,null);
+  const badges=calcBadges(name);
 
   // Quick summary modal
   document.getElementById('modal-title').textContent='';
@@ -6072,7 +6072,7 @@ window.verJugador=function(name){
   const rank=getRank(name);
   const medals=['🥇','🥈','🥉'];
   const rankStr=medals[rank-1]||rank+'º';
-  const badges=calcBadges(name,null);
+  const badges=calcBadges(name);
   const pc=pronosCount(name);
   const isSelf=name===currentUser;
   const isVisible=isSelf||isAdmin||(pr._locked);
@@ -6260,115 +6260,6 @@ window.guardarPronosticos=async function(){
 // ═══ RENDER: RETOS ════════════════════════════════════
 
 // ═══ BADGES ENGINE ═══════════════════════════════════════════════════
-function calcBadges(player, ranked){
-  const badges=[];
-  const p=pronosticos[player]||{};
-  const pp=calcPoints(player);
-  const names=Object.keys(players);
-  const totalGroupMatches=GROUP_MATCHES.length;
-  const myRank=ranked?ranked.findIndex(x=>x.n===player)+1:getRank(player);
-  const total=names.length;
-
-  // 👑 Líder
-  if(myRank===1) badges.push({icon:'👑',name:'Líder',desc:'1º en el ranking'});
-
-  // 🥲 Sin puntos
-  if(pp.total===0) badges.push({icon:'🥲',name:'Sin puntos',desc:'Aún sin puntuar'});
-
-  // 🎓 El Experto — 50%+ exactos en grupos
-  const exactPct=totalGroupMatches>0?Math.round((pp.exactos/getPts('exacto_grupos'))/totalGroupMatches*100):0;
-  if(exactPct>=50) badges.push({icon:'🎓',name:'El Experto',desc:'50%+ exactos en grupos'});
-
-  // 🎯 Francotirador — 3+ exactos (contando por cada 10pts de exactos)
-  const numExactos=Math.floor(pp.exactos/getPts('exacto_grupos'));
-  if(numExactos>=3) badges.push({icon:'🎯',name:'Francotirador',desc:numExactos+' exactos y contando'});
-
-  // 🐙 El Pulpo — 70%+ de quinielas acertadas
-  const totalPartidosConRes=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).length;
-  const numQuinielas=Math.floor(pp.quiniela/getPts('quiniela'));
-  if(totalPartidosConRes>0&&numQuinielas/totalPartidosConRes>=0.7)
-    badges.push({icon:'🐙',name:'El Pulpo',desc:'70%+ de quinielas acertadas'});
-
-  // 😴 Colchonero — más empates pronosticados que victorias
-  let empates=0,victorias=0;
-  GROUP_MATCHES.forEach(m=>{
-    const pm=p.partidos?.[m.id];
-    if(!pm||pm.gl==null) return;
-    if(Number(pm.gl)===Number(pm.gv)) empates++;
-    else victorias++;
-  });
-  if(empates>victorias&&empates>3) badges.push({icon:'😴',name:'Colchonero',desc:'Más empates que victorias pronosticados'});
-
-  // 🃏 El Farol — eligió el campeón menos popular
-  if(p.campeon){
-    const champCount={};
-    names.forEach(n=>{const c=(pronosticos[n]||{}).campeon;if(c)champCount[c]=(champCount[c]||0)+1;});
-    const myChampCount=champCount[p.campeon]||0;
-    const minCount=Math.min(...Object.values(champCount));
-    if(myChampCount===minCount&&myChampCount===1&&names.length>3)
-      badges.push({icon:'🃏',name:'El Farol',desc:'Eligió el campeón menos popular del grupo'});
-  }
-
-  // 🪑 Calentando el Banco — en la 2ª mitad del ranking
-  if(myRank>Math.ceil(total/2)&&total>4)
-    badges.push({icon:'🪑',name:'Calentando el Banco',desc:'En la segunda mitad del ranking'});
-
-  // 🧊 El Congelado — sin puntuar en últimos 5 partidos
-  const recentMatches=GROUP_MATCHES.filter(m=>partidos[m.id]?.gl!=null).slice(-5);
-  const recentPts=recentMatches.reduce((sum,m)=>{
-    const pm=p.partidos?.[m.id]; const rm=partidos[m.id];
-    if(!pm||!rm) return sum;
-    const exacto=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
-    const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
-    const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
-    return sum+(exacto?1:resSign===proSign?1:0);
-  },0);
-  if(recentMatches.length>=5&&recentPts===0)
-    badges.push({icon:'🧊',name:'El Congelado',desc:'Sin acertar en los últimos 5 partidos'});
-
-  // 🔄 Sísifo — (necesita historial, placeholder por ahora)
-  const hist=resultados.historialRanking||[];
-  if(hist.length>=4){
-    let cambios=0;
-    for(let i=1;i<hist.length;i++){
-      const prev=hist[i-1].ranking[player];
-      const curr=hist[i].ranking[player];
-      if(prev&&curr&&prev!==curr) cambios++;
-    }
-    if(cambios>=4) badges.push({icon:'🔄',name:'Sísifo',desc:'Sube, baja, sube, baja...'});
-  }
-
-  // 🎯 Oráculo — 3+ retos acertados
-  const retosGanados=retos.filter(r=>r.ganadores?.[player]).length;
-  if(retosGanados>=3) badges.push({icon:'🔮',name:'Oráculo',desc:'Ha acertado 3 o más retos'});
-
-  // 🦆 El Pato — respondió todos los retos pero no acertó ninguno
-  const retosResueltos=retos.filter(r=>r.resuelto);
-  if(retosResueltos.length>=2){
-    const respondio=retosResueltos.every(r=>(p.retos||{})[r.id]);
-    const acerto=retosResueltos.some(r=>r.ganadores?.[player]);
-    if(respondio&&!acerto) badges.push({icon:'🦆',name:'El Pato',desc:'Respondió todo y no acertó nada'});
-  }
-
-  // 🍀 Suertudo — único en acertar un reto (o uno de menos del 20%)
-  retos.forEach(r=>{
-    if(!r.resuelto||!r.ganadores?.[player]) return;
-    const ganadores=Object.values(r.ganadores).filter(Boolean).length;
-    if(ganadores===1&&names.length>=5)
-      badges.push({icon:'🍀',name:'Suertudo',desc:'Único en acertar: '+r.titulo});
-  });
-
-  // 🪲 El Escarabajo — puesto 11, 12 o 13
-  if(myRank>=11) badges.push({icon:'🪲',name:'El Escarabajo',desc:'Pisado por todos (puesto '+myRank+'º)'});
-
-  // 💡 El Inspirado — tiene una propuesta publicada
-  const props=resultados.propuestasRetos||[];
-  if(props.some(pr=>pr.autor===player&&pr.estado==='publicado'))
-    badges.push({icon:'💡',name:'El Inspirado',desc:'Propuso un reto que el admin publicó'});
-
-  return badges;
-}
-
 // ═══ RENDER: STATS ════════════════════════════════════
 
 // ═══ RENDER: AVISOS ═══════════════════════════════════
@@ -7166,7 +7057,7 @@ function renderJugadores(){
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
     ${ranked.map(({n,p},i)=>{
       const pl=players[n]||{};
-      const badges=calcBadges(n,ranked);
+      const badges=calcBadges(n);
       const borderColor=i===0?'var(--gold)':i===1?'#c0c0c0':i===2?'#cd7f32':'var(--brd)';
       return `<div style="background:var(--s1);border:1px solid ${borderColor};border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="verJugador('${esc(n)}')">
         <div style="font-size:18px;font-weight:800;color:var(--t3);min-width:28px">${medals[i]||i+1+'º'}</div>
