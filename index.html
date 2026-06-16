@@ -2664,7 +2664,7 @@ window.mostrarSelectorCaptura=function(){
 };
 
 window.generarCapturaRetos=function(){
-  const retosActivos=retos.filter(r=>r.activo);
+  const retosActivos=retos.filter(r=>r.activo&&!r.cerrado&&!(r.deadline&&new Date()>new Date(r.deadline)));
   const selected=retosActivos.filter((_,i)=>document.getElementById('cap-reto-'+i)?.checked);
   if(!selected.length){ alert('Selecciona al menos un reto'); return; }
 
