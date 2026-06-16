@@ -798,8 +798,8 @@ const AVATARS = {
 
 // Default points
 const PTS_DEFAULT = {
-  g1:10, g2:5, terceros:2,
-  exacto_grupos:10, quiniela:4,
+  g1:20, g2:15, terceros:8,
+  exacto_grupos:20, quiniela:10,
   exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
@@ -967,10 +967,56 @@ let resultados = {};
 let partidos = {};
 let retos = [];
 let gambling = {activa:null, historial:[]};
+const GAMBLING_ENABLED = false; // Cambiar a true para activar
 let selectedAvatar = "⚽";
 let _cdInterval = null;
 
 function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.pts[k]:PTS_DEFAULT[k]; }
+
+// Migrar puntos viejos a nuevos valores si el admin no los ha tocado manualmente
+// o si tienen los valores antiguos exactos
+window.aplicarNuevosPuntos=function(){
+  if(!confirm('¿Aplicar los nuevos valores de puntos? Esto afecta a TODOS los jugadores retroactivamente.')) return;
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  // Rellenar inputs del panel
+  Object.entries(nuevos).forEach(function(e){
+    var el=document.getElementById('ar-pts_'+e[0])||document.getElementById('ar-'+e[0]);
+    if(el) el.value=e[1];
+  });
+  // Guardar directamente en Firestore
+  const ptsActual=Object.assign({},resultados.pts||{});
+  Object.assign(ptsActual,nuevos);
+  setDoc(doc(db,'meta','resultados'),{pts:ptsActual},{merge:true})
+    .then(function(){
+      calcPoints._cache={};
+      showToast('✅ Nuevos valores aplicados retroactivamente');
+      renderAdmin();
+      renderRanking();
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
+window.migrarPuntosNuevos=function(){
+  const pts=resultados.pts||{};
+  const viejosExactos={g1:10,g2:5,terceros:2,exacto_grupos:10,quiniela:4};
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  let needsUpdate=false;
+  const update=Object.assign({},pts);
+  Object.entries(viejosExactos).forEach(function(e){
+    var k=e[0],v=e[1];
+    // Solo migrar si tiene el valor viejo exacto o no está seteado
+    if(!pts[k]||pts[k]===v){
+      update[k]=nuevos[k];
+      needsUpdate=true;
+    }
+  });
+  if(needsUpdate){
+    const {setDoc,doc}=window._firestoreRef||{};
+    if(!setDoc||!doc) return;
+    setDoc(doc(window._dbRef,'meta','resultados'),{pts:update},{merge:true})
+      .then(function(){calcPoints._cache={};console.log('Puntos migrados a nuevos valores');})
+      .catch(function(e){console.error('Error migrando puntos:',e);});
+  }
+};
 
 // ═══ UTILS ════════════════════════════════════════════════
 function simpleHash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
@@ -1609,7 +1655,7 @@ function renderRanking(){
       <th width="40" style="text-align:center;font-size:9px">Elim</th>
       <th width="40" style="text-align:center;font-size:9px">Brack</th>
       <th width="40" style="text-align:center;font-size:9px">Prem</th>
-      <th width="40" style="text-align:center;font-size:9px;color:#f59e0b">Gamb</th>
+      ${GAMBLING_ENABLED?'<th width="40" style="text-align:center;font-size:9px;color:#f59e0b">Gamb</th>':''}
     </tr></thead>
     <tbody>${ranked.map(({n,p},i)=>{
       const pl=players[n]||{};
@@ -1635,7 +1681,7 @@ function renderRanking(){
         <td style="text-align:center;font-size:12px">${col(p.elim)}</td>
         <td style="text-align:center;font-size:12px">${col(p.bracket_pts)}</td>
         <td style="text-align:center;font-size:12px">${col((p.clasif||0)+(p.premios||0)||0)}</td>
-        <td style="text-align:center;font-size:12px">${p.gambling!==0?(p.gambling>0?'<span style="color:#4ade80;font-weight:700">+'+p.gambling+'</span>':'<span style="color:#f87171;font-weight:700">'+p.gambling+'</span>'):'<span style="color:var(--brd)">—</span>'}</td>
+        ${GAMBLING_ENABLED?('<td style="text-align:center;font-size:12px">'+(p.gambling!==0?(p.gambling>0?'<span style="color:#4ade80;font-weight:700">+'+p.gambling+'</span>':'<span style="color:#f87171;font-weight:700">'+p.gambling+'</span>'):'<span style="color:var(--brd)">—</span>')+'</td>'):''}
       </tr>`;
     }).join('')}</tbody>
   </table>
@@ -2399,7 +2445,7 @@ function renderRetos(){
   }
 
   // Share button - use regular string to avoid nested backtick issues
-  const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div><div style="margin-bottom:14px"><button class="btn btn-s btn-sm" onclick="mostrarProponerApuesta()" style="padding:12px;font-size:13px;width:100%">🎰 Proponer apuesta</button></div>';
+  const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div>';
 
 
   // Filter tab counts
@@ -3020,6 +3066,7 @@ function calcBadges(player){
 function renderGamblingCard(){
   const el=document.getElementById('gambling-card');
   if(!el) return;
+  if(!GAMBLING_ENABLED){ el.innerHTML=''; return; }
 
   // Botón proponer — siempre al pie, todo el mundo lo ve
   var propBtn='<div style="text-align:center;margin-top:6px">'
@@ -4126,6 +4173,11 @@ function renderAdmin(){
       <div class="pts-grid">
         ${['campeon','semi','tercero','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','terceros','gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].map(k=>ptsField(k,k)).join('')}
       </div>
+      <div style="margin-top:10px;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;margin-bottom:8px">
+        <div style="font-size:11px;color:#4ade80;font-weight:700;margin-bottom:6px">✨ Nuevos valores (junio 2026)</div>
+        <div style="font-size:11px;color:var(--t2);margin-bottom:8px">Exacto +20 · Quiniela +10 · 1º grupo +20 · 2º grupo +15 · Terceros +8</div>
+        <button class="btn btn-sm" onclick="aplicarNuevosPuntos()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer">⚡ Aplicar con carácter retroactivo</button>
+      </div>
       <button class="btn btn-p btn-sm" onclick="guardarPuntos()">Guardar puntos</button>
     </div></div>
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec5')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🏆 Resultados reales — Tablas de grupos</h3><span class="admin-sec-arrow" id="adminarrow-sec5">▼</span></div><div class="admin-sec-body" id="adminsec-sec5">
@@ -4167,9 +4219,7 @@ function renderAdmin(){
       ${koAdminHtml}
       <button class="btn btn-p btn-w" style="margin-top:10px" onclick="guardarKO()">💾 Guardar eliminatoria</button>
     </div></div>
-    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec-gamb')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎰 Gambling</h3><span class="admin-sec-arrow" id="adminarrow-sec-gamb">▼</span></div><div class="admin-sec-body" id="adminsec-sec-gamb">
-      ${gamblingAdminHtml}
-    </div></div>
+    ${GAMBLING_ENABLED?('<div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec(\'sec-gamb\')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎰 Gambling</h3><span class="admin-sec-arrow" id="adminarrow-sec-gamb">▼</span></div><div class="admin-sec-body" id="adminsec-sec-gamb">'+gamblingAdminHtml+'</div></div>'):''}
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec10')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎯 Mini-retos</h3><span class="admin-sec-arrow" id="adminarrow-sec10">▼</span></div><div class="admin-sec-body" id="adminsec-sec10">
       ${retosHtml}
     </div></div>
@@ -5385,7 +5435,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
-  {id:'stats',           icon:'🎰', label:'Gambling'},
+  {id:'stats',           icon:'🎰', label:'Gambling', hidden:!GAMBLING_ENABLED},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
@@ -5402,7 +5452,7 @@ function renderNavDrawer(currentTab){
     pronosticos: (!p._locked&&pronosCount(currentUser).pct<100)?1:0,
     bracket: !res.bracket_locked?ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length:0,
   };
-  el.innerHTML=NAV_TABS.map(t=>`
+  el.innerHTML=NAV_TABS.filter(t=>!t.hidden).map(t=>`
     <button class="nav-item ${t.id===currentTab?'active':''}" onclick="go('${t.id}');closeNav()">
       <span class="nav-item-icon">${t.icon}</span>
       <span>${t.label}</span>
@@ -5983,8 +6033,8 @@ const AVATARS = {
 
 // Default points
 const PTS_DEFAULT = {
-  g1:10, g2:5, terceros:2,
-  exacto_grupos:10, quiniela:4,
+  g1:20, g2:15, terceros:8,
+  exacto_grupos:20, quiniela:10,
   exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
@@ -6155,6 +6205,31 @@ let selectedAvatar = "⚽";
 let _cdInterval = null;
 
 function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.pts[k]:PTS_DEFAULT[k]; }
+
+// Migrar puntos viejos a nuevos valores si el admin no los ha tocado manualmente
+// o si tienen los valores antiguos exactos
+window.migrarPuntosNuevos=function(){
+  const pts=resultados.pts||{};
+  const viejosExactos={g1:10,g2:5,terceros:2,exacto_grupos:10,quiniela:4};
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  let needsUpdate=false;
+  const update=Object.assign({},pts);
+  Object.entries(viejosExactos).forEach(function(e){
+    var k=e[0],v=e[1];
+    // Solo migrar si tiene el valor viejo exacto o no está seteado
+    if(!pts[k]||pts[k]===v){
+      update[k]=nuevos[k];
+      needsUpdate=true;
+    }
+  });
+  if(needsUpdate){
+    const {setDoc,doc}=window._firestoreRef||{};
+    if(!setDoc||!doc) return;
+    setDoc(doc(window._dbRef,'meta','resultados'),{pts:update},{merge:true})
+      .then(function(){calcPoints._cache={};console.log('Puntos migrados a nuevos valores');})
+      .catch(function(e){console.error('Error migrando puntos:',e);});
+  }
+};
 
 // ═══ UTILS ════════════════════════════════════════════════
 function simpleHash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
@@ -7823,7 +7898,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
-  {id:'stats',           icon:'🎰', label:'Gambling'},
+  {id:'stats',           icon:'🎰', label:'Gambling', hidden:!GAMBLING_ENABLED},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
@@ -7840,7 +7915,7 @@ function renderNavDrawer(currentTab){
     pronosticos: (!p._locked&&pronosCount(currentUser).pct<100)?1:0,
     bracket: !res.bracket_locked?ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length:0,
   };
-  el.innerHTML=NAV_TABS.map(t=>`
+  el.innerHTML=NAV_TABS.filter(t=>!t.hidden).map(t=>`
     <button class="nav-item ${t.id===currentTab?'active':''}" onclick="go('${t.id}');closeNav()">
       <span class="nav-item-icon">${t.icon}</span>
       <span>${t.label}</span>
