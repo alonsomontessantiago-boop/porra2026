@@ -2526,23 +2526,21 @@ window.enviarProponerReto=async function(){
 
 window.mostrarSelectorCaptura=function(){
   document.getElementById('modal-title').textContent='📸 Captura de retos';
-  const retosActivos=retos.filter(r=>r.activo);
-  document.getElementById('modal-body').innerHTML=`
-    <button class="btn btn-p btn-w" style="margin-bottom:12px" onclick="generarCapturaRetos()">📸 Generar imagen</button>
-    <p style="font-size:13px;color:var(--t2);margin-bottom:10px">Selecciona los retos a incluir:</p>
-    <div style="margin-bottom:14px">
-      ${retosActivos.map((r,i)=>{
-        const cerrado=r.cerrado||new Date()>new Date(r.deadline);
-        const checked=!cerrado; // pre-select open retos only
-        return `<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:8px;margin-bottom:6px;cursor:pointer">
-          <input type="checkbox" id="cap-reto-${i}" ${checked?'checked':''} style="width:18px;height:18px;accent-color:var(--purple)">
-          <div>
-            <div style="font-size:13px;font-weight:700">${r.titulo}</div>
-            <div style="font-size:11px;color:${cerrado?'var(--t3)':'#4ade80'}">${cerrado?'🔒 Cerrado':'● Abierto'} · +${r.pts} pts</div>
-          </div>
-        </label>`;
-      }).join('')}
-    </div>`;
+  const retosActivos=retos.filter(r=>r.activo&&!r.cerrado&&!(r.deadline&&new Date()>new Date(r.deadline)));
+  const noItems=retosActivos.length===0?'<div style="color:var(--t3);font-size:13px;text-align:center;padding:16px">No hay retos abiertos</div>':'';
+  const items=retosActivos.map((r,i)=>{
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:8px;margin-bottom:6px;cursor:pointer">'
+      +'<input type="checkbox" id="cap-reto-'+i+'" checked style="width:18px;height:18px;accent-color:var(--purple)">'
+      +'<div>'
+      +'<div style="font-size:13px;font-weight:700">'+r.titulo+'</div>'
+      +'<div style="font-size:11px;color:#4ade80">● Abierto · +'+r.pts+' pts</div>'
+      +'</div>'
+      +'</label>';
+  }).join('');
+  document.getElementById('modal-body').innerHTML=''
+    +'<button class="btn btn-p btn-w" style="margin-bottom:12px" onclick="generarCapturaRetos()">📸 Generar imagen</button>'
+    +'<p style="font-size:13px;color:var(--t2);margin-bottom:10px">Selecciona los retos a incluir:</p>'
+    +'<div style="margin-bottom:14px">'+noItems+items+'</div>';
   document.getElementById('detail-modal').style.display='flex';
 };
 
@@ -2847,14 +2845,12 @@ function calcBadges(player){
   if(pts.total>avgPts*1.4 && names.length>3)
     badges.push({icon:'🎓',name:'El Experto',desc:'Muy por encima de la media del grupo'});
 
-  // ── ADMIN BADGES (manual) ──────────────────────────────────────────────
+  // ── ADMIN BADGES (manual) — se insertan AL PRINCIPIO ──────────────────
   const adminBadges=resultados.adminBadges||{};
   const myAdminBadges=adminBadges[player]||[];
-  myAdminBadges.forEach(b=>{
-    badges.push({icon:b.icon||'🏅',name:b.name,desc:b.desc||'',isAdmin:true,hidden:b.hidden});
-  });
+  const adminBadgesList=myAdminBadges.map(b=>({icon:b.icon||'🏅',name:b.name,desc:b.desc||'',isAdmin:true,hidden:b.hidden}));
 
-  return badges;
+  return [...adminBadgesList, ...badges];
 }
 
 // ═══ RENDER: STATS ════════════════════════════════════
