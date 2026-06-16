@@ -4156,7 +4156,7 @@ function renderAdmin(){
       ${Object.entries(res.penalizaciones||{}).map(([name,pens])=>pens.map((p2,i)=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--brd2);font-size:12px">
           <span>${name}: ${p2.motivo} <span style="color:#f87171">(${p2.pts} pts)</span></span>
-          <button class="btn-xs btn-danger" onclick="quitarPenalizacion('${name}',${i})">✕</button>
+          <button class="btn-xs btn-danger" data-pen-name="${name.replace(/'/g,'&#39;')}" data-pen-idx="${i}" onclick="quitarPenalizacion(this.dataset.penName,parseInt(this.dataset.penIdx))">✕</button>
         </div>`).join('')).join('')||'<div style="color:var(--t3);font-size:12px">Sin penalizaciones</div>'}
     </div>`;
 
@@ -4836,9 +4836,14 @@ window.agregarPenalizacion=async function(){
 };
 
 window.quitarPenalizacion=async function(player,idx){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
+  if(!res.penalizaciones||!res.penalizaciones[player]) return;
   res.penalizaciones[player].splice(idx,1);
   await setDoc(doc(db,'meta','resultados'),res);
+  calcPoints._cache={};
+  showToast('✅ Penalización eliminada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.toggleReopenPronos=async function(name){
@@ -7658,9 +7663,14 @@ window.agregarPenalizacion=async function(){
 };
 
 window.quitarPenalizacion=async function(player,idx){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
+  if(!res.penalizaciones||!res.penalizaciones[player]) return;
   res.penalizaciones[player].splice(idx,1);
   await setDoc(doc(db,'meta','resultados'),res);
+  calcPoints._cache={};
+  showToast('✅ Penalización eliminada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.toggleReopenPronos=async function(name){
