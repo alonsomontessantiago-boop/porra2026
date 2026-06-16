@@ -3021,7 +3021,7 @@ function renderGamblingCard(){
   const el=document.getElementById('gambling-card');
   if(!el) return;
   const ap=gambling.activa;
-  if(!ap){ el.innerHTML=''; return; }
+  if(!ap||ap.estado==='cancelada'){ el.innerHTML=''; return; }
 
   const now=new Date();
   const deadline=ap.deadline?new Date(ap.deadline):null;
@@ -3215,7 +3215,9 @@ function startGamblingDeadlineChecker(){
       Object.values(ap.apuestas||{}).forEach(function(b){opcVotos[b.opcion]=(opcVotos[b.opcion]||0)+1;});
       const todosIgual=Object.keys(opcVotos).length<=1&&Object.keys(ap.apuestas||{}).length>0;
       const newAp=Object.assign({},ap,{estado:todosIgual?'cancelada':'cerrada'});
-      setDoc(doc(db,'meta','gambling'),{activa:newAp,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+      const newHist=todosIgual?[...(gambling.historial||[]),newAp]:(gambling.historial||[]);
+      const newActiva=todosIgual?null:newAp;
+      setDoc(doc(db,'meta','gambling'),{activa:newActiva,historial:newHist,propuestas:gambling.propuestas||[]})
         .then(function(){
           if(todosIgual) showToast('🚫 Apuesta cancelada automáticamente (todos votaron igual)');
           else showToast('🔒 Apuesta cerrada automáticamente');
@@ -3270,7 +3272,8 @@ window.resolverApuesta=function(opcionGanadora){
   // Calcular bote total para log
   const boteTotal=Object.values(ap.apuestas||{}).reduce(function(s,b){return s+(b.pts||0);},0);
   const boteGan=Object.values(ap.apuestas||{}).filter(function(b){return b.opcion===opcionGanadora;}).reduce(function(s,b){return s+(b.pts||0);},0);
-  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+  const histRes=[...(gambling.historial||[]),ap];
+  setDoc(doc(db,'meta','gambling'),{activa:null,historial:histRes,propuestas:gambling.propuestas||[]})
     .then(function(){
       calcPoints._cache={};
       showToast('✅ Apuesta resuelta: '+opcionGanadora+' · Bote: '+boteTotal+' pts');
@@ -3282,10 +3285,10 @@ window.resolverApuesta=function(opcionGanadora){
 window.cancelarApuesta=function(){
   if(!isAdmin||!gambling.activa) return;
   if(!confirm('¿Cancelar la apuesta? Se devolverán los puntos a todos.')) return;
-  const ap=Object.assign({},gambling.activa);
-  ap.estado='cancelada';
-  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
-    .then(function(){showToast('🚫 Apuesta cancelada');renderAdmin();})
+  const ap=Object.assign({},gambling.activa,{estado:'cancelada'});
+  const hist=[...(gambling.historial||[]),ap];
+  setDoc(doc(db,'meta','gambling'),{activa:null,historial:hist,propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('🚫 Apuesta cancelada y archivada');renderAdmin();})
     .catch(function(e){alert('Error: '+e.message);});
 };
 
@@ -3368,13 +3371,34 @@ function renderStats(){
   if(names.length===0){el.innerHTML='<div class="empty">Sin jugadores</div>';return;}
 
   if(tabSel==='historial'){
-    if(hist.length===0){
-      el.innerHTML=tabs+'<div class="empty">No hay apuestas todavía</div>';
+    // Sub-pestañas del historial
+    const histTab=window._gambHistTab||'activas';
+    const apActiva=gambling.activa;
+    const apActivaArr=apActiva&&apActiva.estado!=='cancelada'?[apActiva]:[];
+    const apResueltas=hist.filter(function(ap){return ap.estado==='resuelta';});
+    const apCanceladas=hist.filter(function(ap){return ap.estado==='cancelada';});
+
+    var subTabs='<div style="display:flex;gap:6px;margin-bottom:12px">';
+    [['activas','🟢 Activa'+(apActivaArr.length?'':'s')],['resueltas','✅ Resueltas'],['canceladas','🚫 Canceladas']].forEach(function(pair){
+      var t=pair[0],label=pair[1];
+      var sel=histTab===t;
+      var count=t==='activas'?apActivaArr.length:t==='resueltas'?apResueltas.length:apCanceladas.length;
+      var borderS=sel?'var(--purple)':'var(--brd)';
+      var bgS=sel?'rgba(139,92,246,.15)':'var(--s2)';
+      var colorS=sel?'#c084fc':'var(--t2)';
+      subTabs+='<button data-ht="'+t+'" onclick="window._gambHistTab=this.dataset.ht;renderStats()" style="flex:1;padding:6px 4px;border-radius:8px;border:2px solid '+borderS+';background:'+bgS+';color:'+colorS+';font-size:11px;font-weight:700;cursor:pointer">'+label+(count?' ('+count+')':'')+'</button>';
+    });
+    subTabs+='</div>';
+
+    var listaAps=histTab==='activas'?apActivaArr:histTab==='resueltas'?apResueltas:apCanceladas;
+
+    if(listaAps.length===0){
+      el.innerHTML=tabs+subTabs+'<div class="empty">Sin apuestas en esta categoría</div>';
       return;
     }
-    var cards=[...hist].reverse().map(function(ap){
+
+    function renderApCard(ap){
       const boteTotal=Object.values(ap.apuestas||{}).reduce(function(s,b){return s+(b.pts||0);},0);
-      const ganColor=ap.opcionGanadora?'#4ade80':'var(--t3)';
       var jugadores=Object.entries(ap.apuestas||{}).map(function(e){
         var n=e[0],b=e[1];
         var gano=ap.opcionGanadora&&b.opcion===ap.opcionGanadora;
@@ -3388,19 +3412,28 @@ function renderStats(){
         }
         return '<div style="font-size:11px;color:var(--t2);padding:3px 0">'+n+': <strong>'+b.opcion+'</strong> ('+b.pts+' pts)'+netoPts+'</div>';
       }).join('');
-
+      var estadoBadge=ap.estado==='resuelta'
+        ?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,.12);color:#4ade80">✅ Resuelta</span>'
+        :ap.estado==='cancelada'
+        ?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--s3);color:var(--t3)">🚫 Cancelada</span>'
+        :ap.estado==='cerrada'
+        ?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(99,102,241,.15);color:#818cf8">🔒 Cerrada</span>'
+        :'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(139,92,246,.15);color:#c084fc">🟢 Abierta</span>';
       return '<div style="padding:12px;background:var(--s2);border:1px solid var(--brd);border-radius:10px;margin-bottom:10px">'
-        +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">'+ap.titulo+'</div>'
-        +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+        +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:6px">'+ap.titulo+'</div>'
+        +'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+        +estadoBadge
         +'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--s3);color:var(--t2)">Bote: '+boteTotal+' pts</span>'
         +(ap.opcionGanadora?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,.12);color:#4ade80">✓ '+ap.opcionGanadora+'</span>':'')
-        +(ap.estado==='cancelada'?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--s3);color:var(--t3)">🚫 Cancelada</span>':'')
         +'</div>'
-        +'<details><summary style="font-size:11px;color:var(--t3);cursor:pointer">Ver apuestas</summary>'
-        +'<div style="margin-top:6px">'+jugadores+'</div></details>'
+        +(Object.keys(ap.apuestas||{}).length>0
+          ?'<details><summary style="font-size:11px;color:var(--t3);cursor:pointer">Ver apuestas ('+Object.keys(ap.apuestas||{}).length+')</summary><div style="margin-top:6px">'+jugadores+'</div></details>'
+          :'<div style="font-size:11px;color:var(--t3)">Sin apuestas</div>')
         +'</div>';
-    }).join('');
-    el.innerHTML=tabs+cards;
+    }
+
+    var cards=[...listaAps].reverse().map(renderApCard).join('');
+    el.innerHTML=tabs+subTabs+cards;
 
   } else {
     // Estadísticas
