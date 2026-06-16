@@ -422,6 +422,7 @@ window.addEventListener('load', function(){
   <div id="partido-del-dia"></div>
   <div id="aviso-ranking"></div>
   <div id="ranking-banners"></div>
+  <div id="gambling-card"></div>
   <div id="bote-bar"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
   <div class="sec" style="margin:0">🏅 Clasificación en vivo</div>
@@ -455,9 +456,9 @@ window.addEventListener('load', function(){
   <div id="retos-content"></div>
 </div>
 
-<!-- STATS -->
+<!-- STATS / GAMBLING -->
 <div id="stats-page" class="page">
-  <div class="sec">📊 Estadísticas</div>
+  <div class="sec">🎰 Gambling</div>
   <div id="stats-content"></div>
 </div>
 
@@ -965,6 +966,7 @@ let pronosticos = {};
 let resultados = {};
 let partidos = {};
 let retos = [];
+let gambling = {activa:null, historial:[]};
 let selectedAvatar = "⚽";
 let _cdInterval = null;
 
@@ -1082,6 +1084,14 @@ async function listenMeta(){
   onSnapshot(doc(db,"meta","retos"),d=>{
     retos=d.exists()?(d.data().list||[]):[];
     if(isActive('retos')) renderRetos();
+  });
+  onSnapshot(doc(db,"meta","gambling"),d=>{
+    const data=d.exists()?d.data():{};
+    gambling={activa:data.activa||null, historial:data.historial||[], propuestas:data.propuestas||[]};
+    renderGamblingCard();
+    if(isActive('stats')) renderStats();
+    // Arrancar checker de deadline automático
+    startGamblingDeadlineChecker();
   });
 }
 
@@ -1254,7 +1264,7 @@ function calcPoints(player){
 function _calcPointsRaw(player){
   const p=pronosticos[player]||{};
   const res=resultados||{};
-  const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,details:[]};
+  const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,gambling:0,details:[]};
   function add(cat,label,v){ if(v>0){ pt[cat]+=v;pt.total+=v;pt.details.push({cat,label,v}); } }
 
   // Clasificación final
@@ -1411,6 +1421,32 @@ function _calcPointsRaw(player){
   // Mini-retos
   retos.forEach(r=>{
     if(r.ganadores&&r.ganadores[player]) add('premios','Reto: '+r.titulo,r.pts||0);
+  });
+
+  // Gambling — sumar ganancias/pérdidas de apuestas resueltas
+  (gambling.historial||[]).forEach(ap=>{
+    if(ap.estado!=='resuelta'&&ap.estado!=='cancelada') return;
+    const myBet=ap.apuestas?.[player];
+    if(!myBet) return;
+    if(ap.estado==='cancelada'){
+      // Devolver puntos apostados (neto 0, no sumamos nada porque no se restaron)
+      return;
+    }
+    const ganadora=ap.opcionGanadora;
+    if(myBet.opcion===ganadora){
+      // Ganador: recibe parte proporcional del bote total
+      const boteTotal=Object.values(ap.apuestas).reduce((s,b)=>s+(b.pts||0),0);
+      const boteGanadores=Object.values(ap.apuestas).filter(b=>b.opcion===ganadora).reduce((s,b)=>s+(b.pts||0),0);
+      if(boteGanadores>0){
+        const ganancia=Math.round(boteTotal*(myBet.pts/boteGanadores));
+        const neto=ganancia-myBet.pts; // lo que gana de más
+        if(neto>0) add('gambling','Gambling: '+ap.titulo+' (+'+ganancia+')',neto);
+      }
+    } else {
+      // Perdedor: perdió lo apostado (resta)
+      pt.gambling-=myBet.pts; pt.total-=myBet.pts;
+      pt.details.push({cat:'gambling',label:'Gambling: '+ap.titulo+' (-'+myBet.pts+')',v:-myBet.pts});
+    }
   });
 
   // Penalizaciones del admin
@@ -1573,6 +1609,7 @@ function renderRanking(){
       <th width="40" style="text-align:center;font-size:9px">Elim</th>
       <th width="40" style="text-align:center;font-size:9px">Brack</th>
       <th width="40" style="text-align:center;font-size:9px">Prem</th>
+      <th width="40" style="text-align:center;font-size:9px;color:#f59e0b">Gamb</th>
     </tr></thead>
     <tbody>${ranked.map(({n,p},i)=>{
       const pl=players[n]||{};
@@ -1598,6 +1635,7 @@ function renderRanking(){
         <td style="text-align:center;font-size:12px">${col(p.elim)}</td>
         <td style="text-align:center;font-size:12px">${col(p.bracket_pts)}</td>
         <td style="text-align:center;font-size:12px">${col((p.clasif||0)+(p.premios||0)||0)}</td>
+        <td style="text-align:center;font-size:12px">${p.gambling!==0?(p.gambling>0?'<span style="color:#4ade80;font-weight:700">+'+p.gambling+'</span>':'<span style="color:#f87171;font-weight:700">'+p.gambling+'</span>'):'<span style="color:var(--brd)">—</span>'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>
@@ -2361,7 +2399,7 @@ function renderRetos(){
   }
 
   // Share button - use regular string to avoid nested backtick issues
-  const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div>';
+  const topBtns='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><button class="btn btn-p btn-sm" onclick="mostrarProponerReto()" style="padding:12px;font-size:13px">💡 Proponer reto</button><button class="btn btn-s btn-sm" onclick="mostrarSelectorCaptura()" style="padding:12px;font-size:13px">📸 Compartir</button></div><div style="margin-bottom:14px"><button class="btn btn-s btn-sm" onclick="mostrarProponerApuesta()" style="padding:12px;font-size:13px;width:100%">🎰 Proponer apuesta</button></div>';
 
 
   // Filter tab counts
@@ -2492,6 +2530,16 @@ function renderRetos(){
     </div>`;
   }).join('');
 }
+
+window.mostrarProponerApuesta=function(){
+  document.getElementById('modal-title').textContent='🎰 Proponer una apuesta';
+  document.getElementById('modal-body').innerHTML=''
+    +'<p style="font-size:13px;color:var(--t2);margin-bottom:14px">El admin revisará tu propuesta antes de lanzarla.</p>'
+    +'<div class="field"><label>Pregunta</label><input class="fi" type="text" id="prop-gamb-titulo" placeholder="ej: ¿Quién marcará primero?"></div>'
+    +'<div class="field" style="margin-top:10px"><label>Opciones (separadas por comas)</label><input class="fi" type="text" id="prop-gamb-opciones" placeholder="ej: España, Croacia, Sin gol"></div>'
+    +'<button class="btn btn-p btn-w" style="margin-top:14px" onclick="proponerApuesta()">Enviar propuesta</button>';
+  document.getElementById('detail-modal').style.display='flex';
+};
 
 window.mostrarProponerReto=function(){
   document.getElementById('modal-title').textContent='💡 Proponer un reto';
@@ -2742,8 +2790,9 @@ function calcBadges(player){
   if(myRank===names.length && names.length>1)
     badges.push({icon:'😴',name:'El Colchonero',desc:'Último en el ranking'});
 
-  // 🃏 El Farol — muchos puntos de premios vs pocos de grupos
-  if(pts.premios>pts.grupos && pts.premios>20)
+  // 🃏 El Farol — muchos puntos de premios vs pocos de grupos (solo cuando hay resultados de grupos)
+  const hayTablaGrupo=Object.keys(GRUPOS).some(g=>resultados['tabla_'+g]&&resultados['tabla_'+g].length>0);
+  if(hayTablaGrupo && pts.premios>pts.grupos && pts.premios>20)
     badges.push({icon:'🃏',name:'El Farol',desc:'Más puntos de premios que de grupos'});
 
   // 🪑 Calentando el Banco — cero puntos de eliminatorias
@@ -2870,6 +2919,95 @@ function calcBadges(player){
   if(pts.total>avgPts*1.4 && names.length>3)
     badges.push({icon:'🎓',name:'El Experto',desc:'Muy por encima de la media del grupo'});
 
+  // ── BADGES GAMBLING ────────────────────────────────────────────────────
+  const gambHist=gambling.historial||[];
+  const misApuestas=gambHist.filter(ap=>ap.apuestas?.[player]);
+  const misGanadas=misApuestas.filter(ap=>ap.estado==='resuelta'&&ap.apuestas?.[player]?.opcion===ap.opcionGanadora);
+  const misPerdidas=misApuestas.filter(ap=>ap.estado==='resuelta'&&ap.apuestas?.[player]?.opcion!==ap.opcionGanadora);
+  const totalGanado=misGanadas.reduce((s,ap)=>{
+    const boteTotal=Object.values(ap.apuestas).reduce((t,b)=>t+(b.pts||0),0);
+    const boteGan=Object.values(ap.apuestas).filter(b=>b.opcion===ap.opcionGanadora).reduce((t,b)=>t+(b.pts||0),0);
+    const myPts2=ap.apuestas[player].pts||0;
+    return s+(boteGan>0?Math.round(boteTotal*(myPts2/boteGan)):0);
+  },0);
+  const totalPerdido=misPerdidas.reduce((s,ap)=>s+(ap.apuestas?.[player]?.pts||0),0);
+  const netoGambling=totalGanado-totalPerdido;
+  const apuestasResueltas=gambHist.filter(ap=>ap.estado==='resuelta');
+
+  // 📈 El Especulador — racha 3+ apuestas ganadas consecutivas
+  if(misApuestas.length>=3){
+    let racha=0,maxRacha=0;
+    misApuestas.forEach(ap=>{
+      if(ap.estado==='resuelta'){
+        if(ap.apuestas[player]?.opcion===ap.opcionGanadora){racha++;maxRacha=Math.max(maxRacha,racha);}
+        else racha=0;
+      }
+    });
+    if(maxRacha>=3) badges.push({icon:'📈',name:'El Especulador',desc:'Racha de '+maxRacha+' apuestas ganadas seguidas'});
+  }
+
+  // 🐑 El Borrego — siempre apuesta a la opción con más gente
+  if(misApuestas.filter(ap=>ap.estado==='resuelta').length>=2){
+    const borrego=misApuestas.filter(ap=>ap.estado==='resuelta').every(ap=>{
+      const counts={};
+      Object.values(ap.apuestas).forEach(b=>{counts[b.opcion]=(counts[b.opcion]||0)+1;});
+      const maxOp=Object.entries(counts).sort((a,b2)=>b2[1]-a[1])[0]?.[0];
+      return ap.apuestas[player]?.opcion===maxOp;
+    });
+    if(borrego) badges.push({icon:'🐑',name:'El Borrego',desc:'Siempre apuesta a la opción más popular'});
+  }
+
+  // 🦁 El Contrarian — ganó apostando a la minoría
+  if(misGanadas.some(ap=>{
+    const counts={};
+    Object.values(ap.apuestas).forEach(b=>{counts[b.opcion]=(counts[b.opcion]||0)+1;});
+    const sorted=Object.entries(counts).sort((a,b2)=>b2[1]-a[1]);
+    return sorted.length>1 && ap.apuestas[player]?.opcion===sorted[sorted.length-1][0];
+  })) badges.push({icon:'🦁',name:'El Contrarian',desc:'Ganó apostando a la opción con menos seguidores'});
+
+  // 💰 El Tiburón — mayor ganancia neta total
+  if(apuestasResueltas.length>=2){
+    const maxNeto=Math.max(...Object.keys(players).map(n=>{
+      const gH=gambHist.filter(ap=>ap.estado==='resuelta'&&ap.apuestas?.[n]);
+      const gN=gH.reduce((s,ap)=>{
+        const mB=ap.apuestas[n]; if(!mB) return s;
+        if(mB.opcion===ap.opcionGanadora){
+          const bT=Object.values(ap.apuestas).reduce((t,b)=>t+(b.pts||0),0);
+          const bG=Object.values(ap.apuestas).filter(b=>b.opcion===ap.opcionGanadora).reduce((t,b)=>t+(b.pts||0),0);
+          return s+(bG>0?Math.round(bT*(mB.pts/bG))-mB.pts:0);
+        } return s-(mB.pts||0);
+      },0);
+      return gN;
+    }));
+    if(netoGambling>0 && netoGambling>=maxNeto && Object.keys(players).length>1)
+      badges.push({icon:'💰',name:'El Tiburón',desc:'Mayor ganancia neta en apuestas (+'+netoGambling+' pts)'});
+  }
+
+  // 😬 El Kamikaze — apostó todos sus puntos en una apuesta
+  if(misApuestas.some(ap=>{
+    const myPts2=ap.apuestas?.[player]?.pts||0;
+    // Calcular puntos que tenía antes de esta apuesta (aprox: puntos actuales + perdidos - ganados)
+    return myPts2>=pts.total*0.95 && myPts2>0;
+  })) badges.push({icon:'😬',name:'El Kamikaze',desc:'Apostó casi todos sus puntos en una sola apuesta'});
+
+  // 🎯 El Analista — >70% acierto con mínimo 3 apuestas resueltas
+  if(misApuestas.filter(ap=>ap.estado==='resuelta').length>=3){
+    const pct=misGanadas.length/misApuestas.filter(ap=>ap.estado==='resuelta').length;
+    if(pct>=0.7) badges.push({icon:'🎯',name:'El Analista',desc:'Acierta el '+Math.round(pct*100)+'% de sus apuestas'});
+  }
+
+  // 🧊 El Cobarde — nunca participó (con 2+ apuestas en historial)
+  if(apuestasResueltas.length>=2 && misApuestas.length===0)
+    badges.push({icon:'🧊',name:'El Cobarde',desc:'Nunca ha participado en una apuesta'});
+
+  // 🤑 El Banquero — acumuló 50+ puntos solo de apuestas ganadas
+  if(totalGanado>=50)
+    badges.push({icon:'🤑',name:'El Banquero',desc:'Ha ganado '+totalGanado+' pts en total apostando'});
+
+  // 💸 El Arruinado — ha perdido más de lo que ha ganado en apuestas
+  if(misPerdidas.length>=2 && totalPerdido>totalGanado && totalPerdido>20)
+    badges.push({icon:'💸',name:'El Arruinado',desc:'Ha perdido más puntos de los que ha ganado apostando'});
+
   // ── ADMIN BADGES (manual) — se insertan AL PRINCIPIO ──────────────────
   const adminBadges=resultados.adminBadges||{};
   const myAdminBadges=adminBadges[player]||[];
@@ -2879,203 +3017,452 @@ function calcBadges(player){
 }
 
 // ═══ RENDER: STATS ════════════════════════════════════
-function renderStats(){
-  const el=document.getElementById('stats-content');
-  const names=Object.keys(players);
-  if(names.length<2){ el.innerHTML='<div class="empty">Faltan jugadores para ver estadísticas</div>'; return; }
-
-  const ranked=names.map(n=>{return{n,p:calcPoints(n)}}).sort((a,b)=>desempate(b.p,b.n)-desempate(a.p,a.n));
-  
-  // Most chosen champion
-  const champCount={};
-  names.forEach(n=>{ const c=(pronosticos[n]||{}).campeon; if(c) champCount[c]=(champCount[c]||0)+1; });
-  const sortedChamp=Object.entries(champCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-  // Exactos per player
-  const exactosRanked=[...ranked].sort((a,b)=>b.p.exactos-a.p.exactos);
-
-  // Expert badge: >50% exactos from groups
-  const totalGroupMatches=GROUP_MATCHES.length;
-  
-  // Stats summary
-  const totalPts=ranked.reduce((s,x)=>s+x.p.total,0);
-  const avgPts=Math.round(totalPts/names.length);
-  const leader=ranked[0];
-
-  let html=`
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-val">${leader.p.total}</div><div class="stat-label">Puntos líder</div></div>
-      <div class="stat-card"><div class="stat-val">${avgPts}</div><div class="stat-label">Media del grupo</div></div>
-      <div class="stat-card"><div class="stat-val">${ranked.reduce((s,x)=>s+x.p.exactos,0)}</div><div class="stat-label">Exactos totales</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">🏆 Equipo más elegido como campeón</div>
-      ${sortedChamp.map(([team,count])=>`
-        <div class="chart-bar">
-          <div class="chart-bar-label">${team}</div>
-          <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.round(count/names.length*100)}%"></div></div>
-          <div class="chart-bar-val">${count}/${names.length}</div>
-        </div>`).join('')}
-    </div>
-
-    <div class="card">
-      <div class="card-title">🎯 Ranking de exactos</div>
-      ${exactosRanked.map((x,i)=>`
-        <div class="chart-bar">
-          <div class="chart-bar-label">${x.n}</div>
-          <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${exactosRanked[0].p.exactos?Math.round(x.p.exactos/exactosRanked[0].p.exactos*100):0}%;background:linear-gradient(90deg,#818cf8,#c084fc)"></div></div>
-          <div class="chart-bar-val">${x.p.exactos}</div>
-        </div>`).join('')}
-    </div>
-
-    <div class="card">
-      <div class="card-title">📊 Comparador de puntos totales</div>
-      <div class="field"><label>Comparar a:</label>
-        <select class="fi" id="compare-player" onchange="renderCompare()">
-          <option value="">— vs media del grupo —</option>
-          ${names.filter(n=>n!==currentUser).map(n=>`<option value="${n}">${n}</option>`).join('')}
-        </select>
-      </div>
-      <div id="compare-content"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">📈 Evolución del ranking</div>
-      ${(()=>{
-        const hist=resultados.historialRanking||[];
-        if(hist.length<2) return '<div style="color:var(--t3);font-size:13px">Se generará automáticamente conforme el admin meta resultados.</div>';
-        const total=Object.keys(players).length;
-        const W=document.getElementById('stats-content')?.offsetWidth-40||300;
-        const PAD_L=18,PAD_R=96,PAD_T=16,PAD_B=22;
-        const W2=W-PAD_L-PAD_R;
-        const ROW_H=22;
-        const H2=ROW_H*(total-1);
-        const H=H2+PAD_T+PAD_B;
-        const steps=hist.length;
-        const names=Object.keys(players);
-        const colors=['#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9','#4ade80','#38bdf8','#fbbf24','#c084fc','#86efac','#fca5a5'];
-
-        function getRankAt(snap,name){
-          if(snap.ranking?.[name]) return snap.ranking[name];
-          if(snap.puntos){
-            const pts={};
-            names.forEach(n=>{pts[n]=snap.puntos[n]||0;});
-            return [...names].sort((a,b)=>pts[b]-pts[a]).indexOf(name)+1;
-          }
-          return names.indexOf(name)+1;
-        }
-        function xPos(i){return PAD_L+(steps<=1?W2/2:i/(steps-1)*W2);}
-        function yPos(rank){return PAD_T+(rank-1)/(total-1||1)*H2;}
-
-        let bg='';
-        bg+=`<rect x="${PAD_L}" y="${PAD_T}" width="${W2}" height="${yPos(3)-PAD_T+ROW_H/2}" fill="rgba(251,191,36,.07)" rx="3"/>`;
-        bg+=`<rect x="${PAD_L}" y="${yPos(total-2)-ROW_H/2}" width="${W2}" height="${H2-(yPos(total-2)-PAD_T)+ROW_H}" fill="rgba(248,113,113,.07)" rx="3"/>`;
-
-        let guides='';
-        for(let pos=1;pos<=total;pos++){
-          const y=yPos(pos);
-          guides+=`<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+W2}" y2="${y}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
-          guides+=`<text x="${PAD_L-3}" y="${y+4}" font-size="8" fill="rgba(255,255,255,.3)" text-anchor="end">${pos}º</text>`;
-        }
-
-        let xLabels='';
-        const seenD=new Set();
-        hist.forEach((snap,i)=>{
-          const d=new Date(snap.fecha||snap.timestamp||Date.now());
-          const label=d.toLocaleDateString('es-ES',{day:'numeric',month:'short'});
-          if(!seenD.has(label)){seenD.add(label);xLabels+=`<text x="${xPos(i)}" y="${H-5}" font-size="8" fill="rgba(255,255,255,.35)" text-anchor="middle">${label}</text>`;}
-        });
-
-        const uid='sv'+Date.now();
-        let lines='',dots='',labels='',animCSS='';
-        names.forEach((n,ni)=>{
-          const col=colors[ni%colors.length];
-          const pts=hist.map((snap,i)=>({x:xPos(i),y:yPos(getRankAt(snap,n)),rank:getRankAt(snap,n)}));
-          const last=pts[pts.length-1];
-          let d='';
-          pts.forEach((p,i)=>{d+=i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`;});
-          const pid=uid+'p'+ni;
-          const dur=(0.7+ni*0.05).toFixed(2);
-          animCSS+=`@keyframes draw${pid}{to{stroke-dashoffset:0}}#${pid}{stroke-dasharray:3000;stroke-dashoffset:3000;animation:draw${pid} ${dur}s cubic-bezier(.4,0,.2,1) forwards;}`;
-          lines+=`<path id="${pid}" d="${d}" stroke="${col}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-          dots+=`<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="${col}" stroke="rgba(20,10,40,.8)" stroke-width="1.2"/>`;
-          let arrow='',arrowCol='rgba(255,255,255,.5)';
-          if(pts.length>=2){const prev=pts[pts.length-2];if(last.rank<prev.rank){arrow='↑';arrowCol='#4ade80';}else if(last.rank>prev.rank){arrow='↓';arrowCol='#f87171';}}
-          const av=players[n]?.avatar||'⚽';
-          labels+=`<text x="${(last.x+9).toFixed(1)}" y="${(last.y+4).toFixed(1)}" font-size="9.5" fill="${col}" font-weight="600">${av} ${n}${arrow?` <tspan fill="${arrowCol}">${arrow}</tspan>`:''}</text>`;
-        });
-
-        const svgId=uid+'svg';
-        return `<style>${animCSS}</style><svg id="${svgId}" width="${W}" height="${H}" style="display:block;overflow:visible">${bg}${guides}${xLabels}${lines}${dots}${labels}</svg>
-          <div style="display:flex;justify-content:flex-end;margin-top:6px">
-            <button class="btn btn-s btn-xs" onclick="exportarGrafico('${svgId}')">📸 Exportar</button>
-          </div>`;
-      })()}
-    </div>
-
-    <div class="card">
-      <div class="card-title">🏅 Badges especiales</div>
-      ${names.map(n=>{
-        const badges=calcBadges(n);
-        if(!badges.length) return '';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--brd2);flex-wrap:wrap">
-          <span style="font-size:13px;min-width:80px">${players[n]?.avatar||'⚽'} ${n}</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">${badges.map(b=>`<span class="badge badge-gold" title="${b.desc}">${b.icon} ${b.name}</span>`).join('')}</div>
-        </div>`;
-      }).filter(Boolean).join('')||'<div style="color:var(--t3);font-size:13px">Sin badges todavía</div>'}
-    </div>`;
-
-  el.innerHTML=html;
-  renderCompare();
-}
-
-window.renderCompare=function(){
-  const el=document.getElementById('compare-content');
+function renderGamblingCard(){
+  const el=document.getElementById('gambling-card');
   if(!el) return;
-  const compareWith=document.getElementById('compare-player')?.value;
-  const names=Object.keys(players);
-  const cats=['clasif','grupos','exactos','quiniela','elim','bracket_pts','premios'];
-  const catLabels={clasif:'Clasif.',grupos:'Grupos',exactos:'Exactos',quiniela:'Quiniela',elim:'Elim.',bracket_pts:'Bracket',premios:'Premios'};
-  
-  const myPts=calcPoints(currentUser);
-  let comparePts;
-  if(compareWith){
-    comparePts=calcPoints(compareWith);
-  } else {
-    // Average of all except current
-    const others=names.filter(n=>n!==currentUser);
-    comparePts={};
-    cats.forEach(c=>{ comparePts[c]=Math.round(others.reduce((s,n)=>s+calcPoints(n)[c],0)/Math.max(others.length,1)); });
-    comparePts.total=cats.reduce((s,c)=>s+(comparePts[c]||0),0);
+  const ap=gambling.activa;
+  if(!ap){ el.innerHTML=''; return; }
+
+  const now=new Date();
+  const deadline=ap.deadline?new Date(ap.deadline):null;
+  const cerrada=ap.estado==='cerrada'||ap.estado==='resuelta'||ap.estado==='cancelada'||(deadline&&now>deadline);
+  const resuelta=ap.estado==='resuelta';
+  const cancelada=ap.estado==='cancelada';
+  const myBet=ap.apuestas?.[currentUser];
+
+  // Calcular cuotas y botes por opción
+  const boteTotal=Object.values(ap.apuestas||{}).reduce((s,b)=>s+(b.pts||0),0);
+  const opcionStats={};
+  (ap.opciones||[]).forEach(op=>{
+    const apuestasOp=Object.values(ap.apuestas||{}).filter(b=>b.opcion===op);
+    opcionStats[op]={pts:apuestasOp.reduce((s,b)=>s+(b.pts||0),0), n:apuestasOp.length};
+  });
+
+  // Cuenta atrás
+  let cdHtml='';
+  if(!cerrada && deadline){
+    const diff=deadline-now;
+    const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+    cdHtml='<span id="gamb-cd" style="font-size:11px;color:var(--t2)">⏱ '+
+      (h>0?h+'h ':'')+m+'m '+s+'s</span>';
   }
 
-  const maxVal=Math.max(...cats.map(c=>Math.max(myPts[c]||0,comparePts[c]||0)),1);
-  
-  el.innerHTML=`
-    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px">
-      <span style="color:var(--purple);font-weight:700">— ${currentUser}</span>
-      <span style="color:var(--orange);font-weight:700">— ${compareWith||'Media grupo'}</span>
-    </div>
-    ${cats.map(c=>{
-      const myVal=myPts[c]||0;
-      const cmpVal=comparePts[c]||0;
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:3px">
-          <span>${catLabels[c]}</span>
-          <span>${myVal} vs ${cmpVal}</span>
-        </div>
-        <div style="position:relative;height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
-          <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(myVal/maxVal*100)}%;background:var(--purple);border-radius:4px;opacity:.8"></div>
-          <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(cmpVal/maxVal*100)}%;background:var(--orange);border-radius:4px;opacity:.5"></div>
-        </div>
-      </div>`;
-    }).join('')}
-    <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--brd);font-size:13px;font-weight:700">
-      <span>Total: <span style="color:var(--purple)">${myPts.total}</span> vs <span style="color:var(--orange)">${comparePts.total}</span></span>
-      <span style="color:${myPts.total>comparePts.total?'#4ade80':myPts.total<comparePts.total?'#f87171':'var(--t2)'}">${myPts.total>comparePts.total?'↑ Llevas ventaja':myPts.total<comparePts.total?'↓ Por detrás':'= Empate'}</span>
-    </div>`;
+  // Card color según estado
+  var borderCol = cancelada?'var(--brd)':resuelta?'var(--gold)':cerrada?'#6366f1':'var(--purple)';
+  var bgCol = cancelada?'var(--s2)':resuelta?'rgba(232,168,32,.08)':cerrada?'rgba(99,102,241,.08)':'rgba(139,92,246,.08)';
+
+  // Mi resultado si resuelta
+  var resultadoHtml='';
+  if(resuelta && myBet){
+    const gano=myBet.opcion===ap.opcionGanadora;
+    if(gano){
+      const boteGan=opcionStats[ap.opcionGanadora]?.pts||1;
+      const ganancia=Math.round(boteTotal*(myBet.pts/boteGan));
+      const neto=ganancia-myBet.pts;
+      resultadoHtml='<div style="margin-top:10px;padding:10px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:8px;text-align:center">'
+        +'<div style="font-size:16px;font-weight:800;color:#4ade80">🎉 +'+neto+' pts netos</div>'
+        +'<div style="font-size:11px;color:var(--t2)">Apostaste '+myBet.pts+' pts → recibiste '+ganancia+' pts</div>'
+        +'</div>';
+    } else if(myBet){
+      resultadoHtml='<div style="margin-top:10px;padding:10px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:8px;text-align:center">'
+        +'<div style="font-size:16px;font-weight:800;color:#f87171">💸 -'+myBet.pts+' pts</div>'
+        +'<div style="font-size:11px;color:var(--t2)">Tu opción no fue la ganadora</div>'
+        +'</div>';
+    }
+  }
+  if(cancelada){
+    resultadoHtml='<div style="margin-top:10px;padding:8px;background:var(--s3);border-radius:8px;text-align:center;font-size:12px;color:var(--t2)">🚫 Apuesta cancelada — puntos devueltos</div>';
+  }
+
+  // Opciones
+  var opcionesHtml='';
+  (ap.opciones||[]).forEach(function(op){
+    const st=opcionStats[op]||{pts:0,n:0};
+    const pct=boteTotal>0?Math.round(st.pts/boteTotal*100):0;
+    const cuota=st.pts>0?(boteTotal/st.pts).toFixed(1):'—';
+    const esMia=myBet?.opcion===op;
+    const esGanadora=resuelta&&ap.opcionGanadora===op;
+    var bg='var(--s2)';
+    if(esGanadora) bg='rgba(74,222,128,.12)';
+    else if(esMia&&!resuelta) bg='rgba(139,92,246,.15)';
+    var borderStyle=esGanadora?'1px solid rgba(74,222,128,.4)':esMia?'1px solid var(--purple)':'1px solid var(--brd)';
+
+    opcionesHtml+='<div style="padding:10px;background:'+bg+';border:'+borderStyle+';border-radius:8px;margin-bottom:6px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:13px;font-weight:700;color:'+(esGanadora?'#4ade80':esMia?'#c084fc':'var(--t1)')+'">'+op+(esGanadora?' ✓':'')+(esMia&&!resuelta?' ← tú':'')+' </span>'
+      +'<span style="font-size:12px;color:var(--gold);font-weight:700">x'+cuota+'</span>'
+      +'</div>'
+      +'<div style="height:4px;background:var(--s3);border-radius:2px;margin-bottom:4px">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+(esGanadora?'#4ade80':esMia?'var(--purple)':'var(--t3)');
+    opcionesHtml+=';border-radius:2px"></div></div>'
+      +'<div style="font-size:11px;color:var(--t2)">'+st.pts+' pts · '+st.n+' jugadores</div>'
+      +'</div>';
+  });
+
+  // Input apostar (solo si abierta y logueado)
+  var apostarHtml='';
+  if(!cerrada && currentUser && !resuelta){
+    const maxPts=calcPoints(currentUser).total;
+    const actualPts=maxPts>0?maxPts:0;
+    apostarHtml='<div style="margin-top:12px;border-top:1px solid var(--brd);padding-top:12px">'
+      +(myBet?'<div style="font-size:12px;color:var(--t2);margin-bottom:8px">Tu apuesta actual: <strong style="color:#c084fc">'+myBet.opcion+' ('+myBet.pts+' pts)</strong> — puedes cambiarla</div>':'')
+      +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+      +(ap.opciones||[]).map(function(op){
+        var sel=myBet&&myBet.opcion===op;
+        var opSafe=op.replace(/'/g,'&#39;');
+        var borderC=sel?'var(--purple)':'var(--brd)';
+        var bgC=sel?'rgba(139,92,246,.2)':'var(--s2)';
+        var colorC=sel?'#c084fc':'var(--t1)';
+        return '<button onclick="selectGamblingOpcion(this.dataset.op)" data-op="'+opSafe+'" style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid '+borderC+';background:'+bgC+';color:'+colorC+';font-size:12px;font-weight:700;cursor:pointer">'+op+'</button>';
+      }).join('')
+      +'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center">'
+      +'<input id="gamb-pts-input" type="number" min="1" max="'+actualPts+'" placeholder="Pts a apostar (máx '+actualPts+')" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--brd);background:var(--s2);color:var(--t1);font-size:14px">'
+      +'<button onclick="confirmarApuesta()" style="padding:10px 16px;border-radius:8px;background:var(--purple);color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Apostar</button>'
+      +'</div>'
+      +'<div id="gamb-opcion-sel" style="font-size:11px;color:var(--t3);margin-top:4px">Selecciona una opción</div>'
+      +'</div>';
+  } else if(cerrada && !resuelta && !cancelada){
+    apostarHtml='<div style="margin-top:10px;padding:8px;background:var(--s3);border-radius:8px;text-align:center;font-size:12px;color:var(--t2)">⏳ Apuesta cerrada — esperando resultado del admin</div>';
+  }
+
+  var estadoLabel=cancelada?'🚫 Cancelada':resuelta?'✅ Resuelta':cerrada?'🔒 Cerrada':'🟢 Abierta';
+  var archBtn=resuelta&&isAdmin?'<button onclick="archivarApuesta()" style="font-size:11px;padding:4px 10px;border-radius:6px;background:var(--s3);border:1px solid var(--brd);color:var(--t2);cursor:pointer;margin-left:8px">Archivar</button>':'';
+
+  el.innerHTML='<div style="margin-bottom:14px;padding:14px;background:'+bgCol+';border:1.5px solid '+borderCol+';border-radius:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'
+    +'<span style="font-size:11px;font-weight:700;color:'+borderCol+'">🎰 APUESTA ACTIVA · '+estadoLabel+'</span>'
+    +cdHtml+archBtn
+    +'</div>'
+    +'<div style="font-size:15px;font-weight:800;color:var(--t1);margin-bottom:10px">'+ap.titulo+'</div>'
+    +opcionesHtml
+    +apostarHtml
+    +resultadoHtml
+    +'</div>';
+
+  // Arrancar cuenta atrás si está abierta
+  if(!cerrada && deadline){
+    clearInterval(window._gambCdInterval);
+    window._gambCdInterval=setInterval(function(){
+      const el2=document.getElementById('gamb-cd');
+      if(!el2){clearInterval(window._gambCdInterval);return;}
+      const diff2=new Date(ap.deadline)-new Date();
+      if(diff2<=0){clearInterval(window._gambCdInterval);renderGamblingCard();return;}
+      const h2=Math.floor(diff2/3600000),m2=Math.floor((diff2%3600000)/60000),s2=Math.floor((diff2%60000)/1000);
+      el2.textContent='⏱ '+(h2>0?h2+'h ':'')+m2+'m '+s2+'s';
+    },1000);
+  }
+}
+
+let _gambOpcionSel=null;
+window.selectGamblingOpcion=function(op){
+  _gambOpcionSel=op;
+  const el=document.getElementById('gamb-opcion-sel');
+  if(el) el.textContent='Opción seleccionada: '+op;
+  // Highlight botones
+  (gambling.activa?.opciones||[]).forEach(function(o){
+    const btns=document.querySelectorAll('#gambling-card button');
+    btns.forEach(function(b){
+      if(b.textContent.trim()===o){
+        b.style.borderColor=o===op?'var(--purple)':'var(--brd)';
+        b.style.background=o===op?'rgba(139,92,246,.2)':'var(--s2)';
+        b.style.color=o===op?'#c084fc':'var(--t1)';
+      }
+    });
+  });
 };
+
+window.confirmarApuesta=function(){
+  if(!currentUser){alert('Debes iniciar sesión');return;}
+  const ap=gambling.activa;
+  if(!ap||ap.estado==='cerrada'||ap.estado==='resuelta'){alert('La apuesta está cerrada');return;}
+  if(!_gambOpcionSel){alert('Selecciona una opción primero');return;}
+  const ptsInput=document.getElementById('gamb-pts-input');
+  const pts=parseInt(ptsInput?.value||0);
+  if(!pts||pts<1){alert('Introduce una cantidad válida');return;}
+  const maxPts=calcPoints(currentUser).total;
+  if(pts>maxPts){alert('No puedes apostar más de tus puntos actuales ('+maxPts+' pts)');return;}
+  // Guardar apuesta
+  const newData=Object.assign({},ap);
+  if(!newData.apuestas) newData.apuestas={};
+  newData.apuestas[currentUser]={opcion:_gambOpcionSel,pts:pts,ts:Date.now()};
+  setDoc(doc(db,'meta','gambling'),{activa:newData,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){
+      showToast('✅ Apuesta guardada: '+_gambOpcionSel+' ('+pts+' pts)');
+      _gambOpcionSel=null;
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
+window.archivarApuesta=function(){
+  if(!confirm('¿Archivar esta apuesta? Se moverá al historial.')) return;
+  const ap=gambling.activa;
+  if(!ap) return;
+  const hist=[...( gambling.historial||[]),ap];
+  setDoc(doc(db,'meta','gambling'),{activa:null,historial:hist,propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('📦 Apuesta archivada');})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+function startGamblingDeadlineChecker(){
+  clearInterval(window._gambDeadlineInterval);
+  window._gambDeadlineInterval=setInterval(function(){
+    const ap=gambling.activa;
+    if(!ap||ap.estado!=='abierta'||!ap.deadline) return;
+    if(new Date()>new Date(ap.deadline)){
+      clearInterval(window._gambDeadlineInterval);
+      // Auto-cerrar
+      const opcVotos={};
+      Object.values(ap.apuestas||{}).forEach(function(b){opcVotos[b.opcion]=(opcVotos[b.opcion]||0)+1;});
+      const todosIgual=Object.keys(opcVotos).length<=1&&Object.keys(ap.apuestas||{}).length>0;
+      const newAp=Object.assign({},ap,{estado:todosIgual?'cancelada':'cerrada'});
+      setDoc(doc(db,'meta','gambling'),{activa:newAp,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+        .then(function(){
+          if(todosIgual) showToast('🚫 Apuesta cancelada automáticamente (todos votaron igual)');
+          else showToast('🔒 Apuesta cerrada automáticamente');
+        }).catch(function(){});
+    }
+  },15000); // Check cada 15 segundos
+}
+
+window.crearApuesta=function(){
+  if(!isAdmin) return;
+  const titulo=document.getElementById('gamb-new-titulo')?.value.trim();
+  const opcionesRaw=document.getElementById('gamb-new-opciones')?.value.trim();
+  const deadline=document.getElementById('gamb-new-deadline')?.value;
+  if(!titulo){alert('Introduce una pregunta');return;}
+  if(!opcionesRaw){alert('Introduce al menos 2 opciones');return;}
+  if(!deadline){alert('El temporizador de cierre es obligatorio');return;}
+  const opciones=opcionesRaw.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  if(opciones.length<2){alert('Necesitas al menos 2 opciones');return;}
+  if(gambling.activa&&gambling.activa.estado!=='cancelada'&&gambling.activa.estado!=='resuelta'){
+    alert('Ya hay una apuesta activa. Archívala primero.');return;
+  }
+  const nueva={id:'gamb_'+Date.now(),titulo:titulo,opciones:opciones,deadline:new Date(deadline).toISOString(),estado:'abierta',apuestas:{},creadaTs:Date.now()};
+  setDoc(doc(db,'meta','gambling'),{activa:nueva,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('🎰 Apuesta lanzada');renderAdmin();})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+window.cerrarApuesta=function(){
+  if(!isAdmin||!gambling.activa) return;
+  const ap=Object.assign({},gambling.activa);
+  // Check cancelación automática
+  const opcVotos={};
+  Object.values(ap.apuestas||{}).forEach(function(b){opcVotos[b.opcion]=(opcVotos[b.opcion]||0)+1;});
+  if(Object.keys(opcVotos).length<=1&&Object.keys(ap.apuestas||{}).length>0){
+    if(!confirm('Todos han apostado a la misma opción. La apuesta se CANCELARÁ y se devolverán los puntos. ¿Continuar?')) return;
+    ap.estado='cancelada';
+  } else {
+    ap.estado='cerrada';
+  }
+  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('🔒 Apuesta cerrada');renderAdmin();})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+window.resolverApuesta=function(opcionGanadora){
+  if(!isAdmin||!gambling.activa) return;
+  if(!confirm('¿Resolver la apuesta con ganadora: "'+opcionGanadora+'"? Esto sumará/restará puntos a todos.')) return;
+  const ap=Object.assign({},gambling.activa);
+  ap.estado='resuelta';
+  ap.opcionGanadora=opcionGanadora;
+  ap.resueltaTs=Date.now();
+  // Calcular bote total para log
+  const boteTotal=Object.values(ap.apuestas||{}).reduce(function(s,b){return s+(b.pts||0);},0);
+  const boteGan=Object.values(ap.apuestas||{}).filter(function(b){return b.opcion===opcionGanadora;}).reduce(function(s,b){return s+(b.pts||0);},0);
+  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){
+      calcPoints._cache={};
+      showToast('✅ Apuesta resuelta: '+opcionGanadora+' · Bote: '+boteTotal+' pts');
+      renderAdmin();
+      renderRanking();
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
+window.cancelarApuesta=function(){
+  if(!isAdmin||!gambling.activa) return;
+  if(!confirm('¿Cancelar la apuesta? Se devolverán los puntos a todos.')) return;
+  const ap=Object.assign({},gambling.activa);
+  ap.estado='cancelada';
+  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('🚫 Apuesta cancelada');renderAdmin();})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+window.extenderDeadline=function(){
+  if(!isAdmin||!gambling.activa) return;
+  const newDl=document.getElementById('gamb-extend-dl')?.value;
+  if(!newDl){alert('Introduce una nueva fecha');return;}
+  const ap=Object.assign({},gambling.activa);
+  ap.deadline=new Date(newDl).toISOString();
+  setDoc(doc(db,'meta','gambling'),{activa:ap,historial:gambling.historial||[],propuestas:gambling.propuestas||[]})
+    .then(function(){showToast('⏱ Temporizador extendido');renderAdmin();renderGamblingCard();})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+window.aprobarPropGamb=function(idx){
+  if(!isAdmin) return;
+  const props=[...(gambling.propuestas||[])];
+  if(!props[idx]) return;
+  // Rellenar formulario de crear con los datos de la propuesta
+  const pr=props[idx];
+  props[idx]=Object.assign({},pr,{estado:'aprobada'});
+  setDoc(doc(db,'meta','gambling'),{activa:gambling.activa||null,historial:gambling.historial||[],propuestas:props})
+    .then(function(){
+      // Pre-rellenar form
+      const tEl=document.getElementById('gamb-new-titulo');
+      const oEl=document.getElementById('gamb-new-opciones');
+      if(tEl) tEl.value=pr.titulo;
+      if(oEl) oEl.value=pr.opciones;
+      showToast('✓ Propuesta aprobada — revisa el formulario y lanza');
+      renderAdmin();
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
+window.rechazarPropGamb=function(idx){
+  if(!isAdmin) return;
+  const props=[...(gambling.propuestas||[])];
+  if(!props[idx]) return;
+  props[idx]=Object.assign({},props[idx],{estado:'rechazada'});
+  setDoc(doc(db,'meta','gambling'),{activa:gambling.activa||null,historial:gambling.historial||[],propuestas:props})
+    .then(function(){showToast('✗ Propuesta rechazada');renderAdmin();})
+    .catch(function(e){alert('Error: '+e.message);});
+};
+
+window.proponerApuesta=function(){
+  if(!currentUser){alert('Debes iniciar sesión');return;}
+  const titulo=document.getElementById('prop-gamb-titulo')?.value.trim();
+  const opciones=document.getElementById('prop-gamb-opciones')?.value.trim();
+  if(!titulo||!opciones){alert('Rellena la pregunta y las opciones');return;}
+  const prop={titulo:titulo,opciones:opciones,autor:currentUser,ts:Date.now(),estado:'pendiente'};
+  const props=[...(gambling.propuestas||[]),prop];
+  setDoc(doc(db,'meta','gambling'),{activa:gambling.activa||null,historial:gambling.historial||[],propuestas:props})
+    .then(function(){
+      showToast('💡 Propuesta enviada al admin');
+      document.getElementById('prop-gamb-titulo').value='';
+      document.getElementById('prop-gamb-opciones').value='';
+    }).catch(function(e){alert('Error: '+e.message);});
+};
+
+function renderStats(){
+  const el=document.getElementById('stats-content');
+  if(!el) return;
+  const names=Object.keys(players);
+  const hist=gambling.historial||[];
+  const apuestasResueltas=hist.filter(ap=>ap.estado==='resuelta');
+
+  // Tabs: historial | stats
+  const tabSel=window._gambTab||'historial';
+
+  var tabs='<div style="display:flex;gap:8px;margin-bottom:16px">'
+    +['historial','estadisticas'].map(function(t){
+      var sel=tabSel===t;
+      var borderT=sel?'var(--purple)':'var(--brd)';
+      var bgT=sel?'rgba(139,92,246,.15)':'var(--s2)';
+      var colorT=sel?'#c084fc':'var(--t2)';
+      var labelT=t==='historial'?'📋 Historial':'📊 Estadísticas';
+      return '<button data-tab="'+t+'" onclick="window._gambTab=this.dataset.tab;renderStats()" style="flex:1;padding:8px;border-radius:8px;border:2px solid '+borderT+';background:'+bgT+';color:'+colorT+';font-size:13px;font-weight:700;cursor:pointer">'+labelT+'</button>';
+    }).join('')
+    +'</div>';
+
+  if(names.length===0){el.innerHTML='<div class="empty">Sin jugadores</div>';return;}
+
+  if(tabSel==='historial'){
+    if(hist.length===0){
+      el.innerHTML=tabs+'<div class="empty">No hay apuestas todavía</div>';
+      return;
+    }
+    var cards=[...hist].reverse().map(function(ap){
+      const boteTotal=Object.values(ap.apuestas||{}).reduce(function(s,b){return s+(b.pts||0);},0);
+      const ganColor=ap.opcionGanadora?'#4ade80':'var(--t3)';
+      var jugadores=Object.entries(ap.apuestas||{}).map(function(e){
+        var n=e[0],b=e[1];
+        var gano=ap.opcionGanadora&&b.opcion===ap.opcionGanadora;
+        var netoPts='';
+        if(gano){
+          const bG=Object.values(ap.apuestas).filter(function(x){return x.opcion===ap.opcionGanadora;}).reduce(function(s,x){return s+(x.pts||0);},0);
+          const gan=bG>0?Math.round(boteTotal*(b.pts/bG)):0;
+          netoPts=' → <span style="color:#4ade80">+'+gan+'</span>';
+        } else if(ap.estado==='resuelta'){
+          netoPts=' → <span style="color:#f87171">-'+b.pts+'</span>';
+        }
+        return '<div style="font-size:11px;color:var(--t2);padding:3px 0">'+n+': <strong>'+b.opcion+'</strong> ('+b.pts+' pts)'+netoPts+'</div>';
+      }).join('');
+
+      return '<div style="padding:12px;background:var(--s2);border:1px solid var(--brd);border-radius:10px;margin-bottom:10px">'
+        +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">'+ap.titulo+'</div>'
+        +'<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+        +'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--s3);color:var(--t2)">Bote: '+boteTotal+' pts</span>'
+        +(ap.opcionGanadora?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,.12);color:#4ade80">✓ '+ap.opcionGanadora+'</span>':'')
+        +(ap.estado==='cancelada'?'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--s3);color:var(--t3)">🚫 Cancelada</span>':'')
+        +'</div>'
+        +'<details><summary style="font-size:11px;color:var(--t3);cursor:pointer">Ver apuestas</summary>'
+        +'<div style="margin-top:6px">'+jugadores+'</div></details>'
+        +'</div>';
+    }).join('');
+    el.innerHTML=tabs+cards;
+
+  } else {
+    // Estadísticas
+    if(apuestasResueltas.length===0){
+      el.innerHTML=tabs+'<div class="empty">Sin apuestas resueltas todavía</div>';
+      return;
+    }
+    // Calcular stats por jugador
+    var playerStats=names.map(function(n){
+      var misAp=apuestasResueltas.filter(function(ap){return ap.apuestas?.[n];});
+      var ganadas=misAp.filter(function(ap){return ap.apuestas[n].opcion===ap.opcionGanadora;});
+      var totalGan=ganadas.reduce(function(s,ap){
+        var bT=Object.values(ap.apuestas).reduce(function(t,b){return t+(b.pts||0);},0);
+        var bG=Object.values(ap.apuestas).filter(function(b){return b.opcion===ap.opcionGanadora;}).reduce(function(t,b){return t+(b.pts||0);},0);
+        var mP=ap.apuestas[n].pts||0;
+        return s+(bG>0?Math.round(bT*(mP/bG)):0);
+      },0);
+      var totalPerd=misAp.filter(function(ap){return ap.apuestas[n].opcion!==ap.opcionGanadora;}).reduce(function(s,ap){return s+(ap.apuestas[n].pts||0);},0);
+      var neto=totalGan-totalPerd;
+      var pct=misAp.length>0?Math.round(ganadas.length/misAp.length*100):0;
+      return {n:n,misAp:misAp.length,ganadas:ganadas.length,neto:neto,pct:pct,totalGan:totalGan};
+    }).filter(function(s){return s.misAp>0;}).sort(function(a,b){return b.neto-a.neto;});
+
+    var boteGrandTotal=apuestasResueltas.reduce(function(s,ap){return s+Object.values(ap.apuestas||{}).reduce(function(t,b){return t+(b.pts||0);},0);},0);
+
+    var statsGlobal='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:100px;padding:10px;background:var(--s2);border-radius:8px;text-align:center">'
+      +'<div style="font-size:20px;font-weight:800;color:var(--gold)">'+apuestasResueltas.length+'</div>'
+      +'<div style="font-size:11px;color:var(--t2)">Apuestas resueltas</div></div>'
+      +'<div style="flex:1;min-width:100px;padding:10px;background:var(--s2);border-radius:8px;text-align:center">'
+      +'<div style="font-size:20px;font-weight:800;color:var(--gold)">'+boteGrandTotal+'</div>'
+      +'<div style="font-size:11px;color:var(--t2)">Pts totales apostados</div></div>'
+      +'<div style="flex:1;min-width:100px;padding:10px;background:var(--s2);border-radius:8px;text-align:center">'
+      +'<div style="font-size:20px;font-weight:800;color:var(--gold)">'+hist.length+'</div>'
+      +'<div style="font-size:11px;color:var(--t2)">Total apuestas</div></div>'
+      +'</div>';
+
+    var tabla=playerStats.length===0?'<div class="empty">Sin datos</div>'
+      :'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<thead><tr style="color:var(--t2);font-size:11px">'
+      +'<th style="text-align:left;padding:6px 4px">Jugador</th>'
+      +'<th style="text-align:center;padding:6px 4px">Apuestas</th>'
+      +'<th style="text-align:center;padding:6px 4px">Ganadas</th>'
+      +'<th style="text-align:center;padding:6px 4px">% Acierto</th>'
+      +'<th style="text-align:center;padding:6px 4px">Neto</th>'
+      +'</tr></thead><tbody>'
+      +playerStats.map(function(s,i){
+        var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+        return '<tr style="border-top:1px solid var(--brd)">'
+          +'<td style="padding:8px 4px;font-weight:700">'+medal+' '+s.n+'</td>'
+          +'<td style="text-align:center;padding:8px 4px">'+s.misAp+'</td>'
+          +'<td style="text-align:center;padding:8px 4px">'+s.ganadas+'</td>'
+          +'<td style="text-align:center;padding:8px 4px">'+s.pct+'%</td>'
+          +'<td style="text-align:center;padding:8px 4px;font-weight:700;color:'+(s.neto>0?'#4ade80':s.neto<0?'#f87171':'var(--t2)')+')">'+(s.neto>0?'+':'')+s.neto+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
+
+    el.innerHTML=tabs+statsGlobal+tabla;
+  }
+}
+
 
 // ═══ RENDER: AVISOS ═══════════════════════════════════
 function renderAvisos(){
@@ -3468,6 +3855,74 @@ function renderAdmin(){
 
     const retosHtml=adminRetosTabs+retosFormHtml+(adminRetosTab==='propuestas'?propsHtml:retosCardsHtml);
 
+  // ── GAMBLING ADMIN HTML ──────────────────────────────────────────────────
+  const apActiva=gambling.activa;
+  const propGamb=(gambling.propuestas||[]).filter(function(p){return p.estado==='pendiente';});
+
+  // Form crear apuesta
+  var gambForm='<div style="margin-bottom:14px">'
+    +'<div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">CREAR NUEVA APUESTA</div>'
+    +(apActiva?'<div style="padding:8px;background:rgba(248,113,113,.1);border-radius:8px;font-size:12px;color:#f87171;margin-bottom:8px">⚠️ Ya hay una apuesta activa. Archívala antes de crear una nueva.</div>':'')
+    +'<div class="res-row"><label>Título / Pregunta</label><input type="text" class="fi" id="gamb-new-titulo" placeholder="¿Quién marca primero?"></div>'
+    +'<div class="res-row"><label>Opciones (separadas por comas)</label><input type="text" class="fi" id="gamb-new-opciones" placeholder="España, Croacia, Sin gol"></div>'
+    +'<div class="res-row"><label>Cierre automático</label><input type="datetime-local" class="fi" id="gamb-new-deadline"></div>'
+    +'<button onclick="crearApuesta()" style="width:100%;padding:10px;border-radius:8px;background:var(--purple);color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-top:4px"'+(apActiva?' disabled style="opacity:.5;cursor:not-allowed"':'ñ')+'>🎰 Lanzar apuesta</button>'
+    +'</div>';
+
+  // Apuesta activa — gestión
+  var gambActivaHtml='';
+  if(apActiva){
+    const boteTotal=Object.values(apActiva.apuestas||{}).reduce(function(s,b){return s+(b.pts||0);},0);
+    const apuestasLista=Object.entries(apActiva.apuestas||{}).map(function(e){
+      return '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--brd2)">'+e[0]+': <strong>'+e[1].opcion+'</strong> ('+e[1].pts+' pts)</div>';
+    }).join('');
+
+    // Check si todos votaron igual
+    const opcVotos={};
+    Object.values(apActiva.apuestas||{}).forEach(function(b){opcVotos[b.opcion]=(opcVotos[b.opcion]||0)+1;});
+    const todosIgual=Object.keys(opcVotos).length<=1 && Object.keys(apActiva.apuestas||{}).length>0;
+
+    gambActivaHtml='<div style="padding:12px;background:var(--s2);border:1px solid var(--purple);border-radius:10px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:800;margin-bottom:8px">📊 '+apActiva.titulo+'</div>'
+      +'<div style="font-size:11px;color:var(--t2);margin-bottom:6px">Estado: <strong>'+apActiva.estado+'</strong> · Bote: <strong>'+boteTotal+' pts</strong> · '+Object.keys(apActiva.apuestas||{}).length+' jugadores</div>'
+      +(todosIgual?'<div style="padding:6px 8px;background:rgba(248,113,113,.1);border-radius:6px;font-size:11px;color:#f87171;margin-bottom:8px">⚠️ Todos han apostado a la misma opción — al cerrar se cancelará automáticamente</div>':'')
+      +'<div style="margin-bottom:10px">'+apuestasLista+'</div>'
+      // Extender deadline
+      +'<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--t2)">Extender cierre:</label><div style="display:flex;gap:6px;margin-top:4px"><input type="datetime-local" id="gamb-extend-dl" class="fi" style="flex:1"><button onclick="extenderDeadline()" style="padding:8px 12px;border-radius:8px;background:var(--s3);border:1px solid var(--brd);color:var(--t1);font-size:12px;cursor:pointer">Extender</button></div></div>'
+      // Resolver
+      +(apActiva.estado==='cerrada'?'<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--t2)">Opción ganadora:</label><div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
+        +(apActiva.opciones||[]).map(function(op){
+          var opS=op.replace(/'/g,'&#39;');
+          return '<button data-op="'+opS+'" onclick="resolverApuesta(this.dataset.op)" style="flex:1;padding:8px;border-radius:8px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:12px;font-weight:700;cursor:pointer">✓ '+op+'</button>';
+        }).join('')
+        +'</div></div>':'')
+      // Botones cerrar/cancelar
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +(apActiva.estado==='abierta'?'<button onclick="cerrarApuesta()" style="flex:1;padding:8px;border-radius:8px;background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#818cf8;font-size:12px;cursor:pointer">🔒 Cerrar apuesta</button>':'')
+      +'<button onclick="cancelarApuesta()" style="flex:1;padding:8px;border-radius:8px;background:rgba(248,113,113,.1);border:1px solid #f87171;color:#f87171;font-size:12px;cursor:pointer">🚫 Cancelar</button>'
+      +'</div>'
+      +'</div>';
+  }
+
+  // Propuestas de jugadores
+  var propGambHtml='';
+  if(propGamb.length>0){
+    propGambHtml='<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">PROPUESTAS DE JUGADORES ('+propGamb.length+')</div>'
+      +propGamb.map(function(pr,i){
+        const ri=(gambling.propuestas||[]).indexOf(pr);
+        return '<div style="padding:10px;background:var(--s2);border:1px solid var(--brd);border-radius:8px;margin-bottom:8px">'
+          +'<div style="font-size:13px;font-weight:700">'+pr.titulo+'</div>'
+          +'<div style="font-size:11px;color:var(--t2);margin-bottom:6px">Por: '+pr.autor+' · Opciones: '+pr.opciones+'</div>'
+          +'<div style="display:flex;gap:6px">'
+          +'<button onclick="aprobarPropGamb('+ri+')" style="flex:1;padding:6px;border-radius:6px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:11px;cursor:pointer">✓ Aprobar</button>'
+          +'<button onclick="rechazarPropGamb('+ri+')" style="flex:1;padding:6px;border-radius:6px;background:rgba(248,113,113,.1);border:1px solid #f87171;color:#f87171;font-size:11px;cursor:pointer">✗ Rechazar</button>'
+          +'</div></div>';
+      }).join('')
+      +'</div>';
+  }
+
+  const gamblingAdminHtml=gambForm+gambActivaHtml+propGambHtml;
+
   // Admin Badges
   const ADMIN_BADGE_PRESETS=[
     {icon:'😭',name:'El Llorón',desc:'Siempre está quejándose'},
@@ -3618,6 +4073,9 @@ function renderAdmin(){
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec9')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚽ Fase eliminatoria</h3><span class="admin-sec-arrow" id="adminarrow-sec9">▼</span></div><div class="admin-sec-body" id="adminsec-sec9">
       ${koAdminHtml}
       <button class="btn btn-p btn-w" style="margin-top:10px" onclick="guardarKO()">💾 Guardar eliminatoria</button>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec-gamb')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎰 Gambling</h3><span class="admin-sec-arrow" id="adminarrow-sec-gamb">▼</span></div><div class="admin-sec-body" id="adminsec-sec-gamb">
+      ${gamblingAdminHtml}
     </div></div>
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec10')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎯 Mini-retos</h3><span class="admin-sec-arrow" id="adminarrow-sec10">▼</span></div><div class="admin-sec-body" id="adminsec-sec10">
       ${retosHtml}
@@ -4834,7 +5292,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
-  {id:'stats',           icon:'📊', label:'Stats'},
+  {id:'stats',           icon:'🎰', label:'Gambling'},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
@@ -5885,7 +6343,7 @@ function calcPoints(player){
 function _calcPointsRaw(player){
   const p=pronosticos[player]||{};
   const res=resultados||{};
-  const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,details:[]};
+  const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,gambling:0,details:[]};
   function add(cat,label,v){ if(v>0){ pt[cat]+=v;pt.total+=v;pt.details.push({cat,label,v}); } }
 
   // Clasificación final
@@ -5998,6 +6456,32 @@ function _calcPointsRaw(player){
   // Mini-retos
   retos.forEach(r=>{
     if(r.ganadores&&r.ganadores[player]) add('premios','Reto: '+r.titulo,r.pts||0);
+  });
+
+  // Gambling — sumar ganancias/pérdidas de apuestas resueltas
+  (gambling.historial||[]).forEach(ap=>{
+    if(ap.estado!=='resuelta'&&ap.estado!=='cancelada') return;
+    const myBet=ap.apuestas?.[player];
+    if(!myBet) return;
+    if(ap.estado==='cancelada'){
+      // Devolver puntos apostados (neto 0, no sumamos nada porque no se restaron)
+      return;
+    }
+    const ganadora=ap.opcionGanadora;
+    if(myBet.opcion===ganadora){
+      // Ganador: recibe parte proporcional del bote total
+      const boteTotal=Object.values(ap.apuestas).reduce((s,b)=>s+(b.pts||0),0);
+      const boteGanadores=Object.values(ap.apuestas).filter(b=>b.opcion===ganadora).reduce((s,b)=>s+(b.pts||0),0);
+      if(boteGanadores>0){
+        const ganancia=Math.round(boteTotal*(myBet.pts/boteGanadores));
+        const neto=ganancia-myBet.pts; // lo que gana de más
+        if(neto>0) add('gambling','Gambling: '+ap.titulo+' (+'+ganancia+')',neto);
+      }
+    } else {
+      // Perdedor: perdió lo apostado (resta)
+      pt.gambling-=myBet.pts; pt.total-=myBet.pts;
+      pt.details.push({cat:'gambling',label:'Gambling: '+ap.titulo+' (-'+myBet.pts+')',v:-myBet.pts});
+    }
   });
 
   // Penalizaciones del admin
@@ -7246,7 +7730,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
-  {id:'stats',           icon:'📊', label:'Stats'},
+  {id:'stats',           icon:'🎰', label:'Gambling'},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
