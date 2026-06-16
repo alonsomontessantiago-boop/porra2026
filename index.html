@@ -3445,7 +3445,7 @@ function renderAdmin(){
     retosCardsHtml=propsHtml;
   }
 
-    const retosHtml=(adminRetosTab==='propuestas'?'':adminRetosTabs)+retosFormHtml+(adminRetosTab==='propuestas'?propsHtml:retosCardsHtml);
+    const retosHtml=adminRetosTabs+retosFormHtml+(adminRetosTab==='propuestas'?propsHtml:retosCardsHtml);
 
   // Admin Badges
   const ADMIN_BADGE_PRESETS=[
