@@ -1172,6 +1172,31 @@ window.checkAdmin=function(){
   } else alert('Contraseña incorrecta');
 };
 
+window.showAdminPwModal=function(){
+  document.getElementById('modal-title').textContent='⚙️ Acceso Admin';
+  document.getElementById('modal-body').innerHTML=''
+    +'<p style="font-size:14px;color:var(--t2);margin-bottom:16px">Introduce la contraseña para acceder al panel de administración.</p>'
+    +'<input id="menu-admin-pw" type="password" placeholder="Contraseña admin" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--brd);background:var(--s2);color:var(--t1);font-size:15px;box-sizing:border-box;margin-bottom:12px">'
+    +'<button class="btn btn-p btn-w" onclick="checkAdminFromMenu()">Entrar</button>';
+  document.getElementById('detail-modal').style.display='flex';
+  setTimeout(function(){ var el=document.getElementById('menu-admin-pw'); if(el){ el.focus(); el.onkeydown=function(e){if(e.key==='Enter') checkAdminFromMenu();}; } },100);
+};
+
+window.checkAdminFromMenu=function(){
+  var pw=document.getElementById('menu-admin-pw');
+  if(!pw) return;
+  if(pw.value===ADMIN_PASS){
+    isAdmin=true;
+    pw.value='';
+    document.getElementById('detail-modal').style.display='none';
+    go('admin');
+  } else {
+    pw.value='';
+    pw.placeholder='❌ Contraseña incorrecta, inténtalo de nuevo';
+    pw.style.borderColor='var(--red)';
+  }
+};
+
 async function doLogin(name){
   currentUser=name;
   await loadAllPronos();
@@ -4813,7 +4838,7 @@ const NAV_TABS = [
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
-  {id:'admin',           icon:'⚙️', label:'Admin', adminOnly:true},
+  {id:'admin',           icon:'⚙️', label:'Admin'},
 ];
 
 function renderNavDrawer(currentTab){
@@ -4826,7 +4851,7 @@ function renderNavDrawer(currentTab){
     pronosticos: (!p._locked&&pronosCount(currentUser).pct<100)?1:0,
     bracket: !res.bracket_locked?ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length:0,
   };
-  el.innerHTML=NAV_TABS.filter(t=>!t.adminOnly||isAdmin).map(t=>`
+  el.innerHTML=NAV_TABS.map(t=>`
     <button class="nav-item ${t.id===currentTab?'active':''}" onclick="go('${t.id}');closeNav()">
       <span class="nav-item-icon">${t.icon}</span>
       <span>${t.label}</span>
@@ -4871,7 +4896,10 @@ window.go=function(tab){
   else if(tab==='perfil') renderPerfil();
   else if(tab==='comparador') renderComparador();
   else if(tab==='jugadores') renderJugadores();
-  else if(tab==='admin') renderAdmin();
+  else if(tab==='admin'){
+    if(isAdmin){ renderAdmin(); }
+    else{ showAdminPwModal(); }
+  }
 };
 
 // ═══ CAPTURA PNG ══════════════════════════════════════════════════════
@@ -5775,6 +5803,31 @@ window.checkAdmin=function(){
     document.getElementById('admin-pw').value='';
     alert('✅ Acceso admin activado');
   } else alert('Contraseña incorrecta');
+};
+
+window.showAdminPwModal=function(){
+  document.getElementById('modal-title').textContent='⚙️ Acceso Admin';
+  document.getElementById('modal-body').innerHTML=''
+    +'<p style="font-size:14px;color:var(--t2);margin-bottom:16px">Introduce la contraseña para acceder al panel de administración.</p>'
+    +'<input id="menu-admin-pw" type="password" placeholder="Contraseña admin" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--brd);background:var(--s2);color:var(--t1);font-size:15px;box-sizing:border-box;margin-bottom:12px">'
+    +'<button class="btn btn-p btn-w" onclick="checkAdminFromMenu()">Entrar</button>';
+  document.getElementById('detail-modal').style.display='flex';
+  setTimeout(function(){ var el=document.getElementById('menu-admin-pw'); if(el){ el.focus(); el.onkeydown=function(e){if(e.key==='Enter') checkAdminFromMenu();}; } },100);
+};
+
+window.checkAdminFromMenu=function(){
+  var pw=document.getElementById('menu-admin-pw');
+  if(!pw) return;
+  if(pw.value===ADMIN_PASS){
+    isAdmin=true;
+    pw.value='';
+    document.getElementById('detail-modal').style.display='none';
+    go('admin');
+  } else {
+    pw.value='';
+    pw.placeholder='❌ Contraseña incorrecta, inténtalo de nuevo';
+    pw.style.borderColor='var(--red)';
+  }
 };
 
 async function doLogin(name){
@@ -7197,7 +7250,7 @@ const NAV_TABS = [
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
   {id:'perfil',          icon:'👤', label:'Perfil'},
-  {id:'admin',           icon:'⚙️', label:'Admin', adminOnly:true},
+  {id:'admin',           icon:'⚙️', label:'Admin'},
 ];
 
 function renderNavDrawer(currentTab){
@@ -7210,7 +7263,7 @@ function renderNavDrawer(currentTab){
     pronosticos: (!p._locked&&pronosCount(currentUser).pct<100)?1:0,
     bracket: !res.bracket_locked?ALL_BRACKET.filter(m=>!BRACKET_R32.some(r=>r.id===m.id)&&!p.bracket?.[m.id]).length:0,
   };
-  el.innerHTML=NAV_TABS.filter(t=>!t.adminOnly||isAdmin).map(t=>`
+  el.innerHTML=NAV_TABS.map(t=>`
     <button class="nav-item ${t.id===currentTab?'active':''}" onclick="go('${t.id}');closeNav()">
       <span class="nav-item-icon">${t.icon}</span>
       <span>${t.label}</span>
@@ -7255,7 +7308,10 @@ window.go=function(tab){
   else if(tab==='perfil') renderPerfil();
   else if(tab==='comparador') renderComparador();
   else if(tab==='jugadores') renderJugadores();
-  else if(tab==='admin') renderAdmin();
+  else if(tab==='admin'){
+    if(isAdmin){ renderAdmin(); }
+    else{ showAdminPwModal(); }
+  }
 };
 
 // ═══ CAPTURA PNG ══════════════════════════════════════════════════════
