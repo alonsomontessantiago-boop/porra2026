@@ -798,15 +798,14 @@ const AVATARS = {
 
 // Default points
 const PTS_DEFAULT = {
-  g1:20, g2:15, terceros:8,
+  g1:10, g2:10, g3:10, g4:10, terceros:8,
   exacto_grupos:20, quiniela:10,
   exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
-  bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
-  campeon:20, semi:15, tercero:10,
-  gol1:5, gol2:3, gol3:1,
-  asist1:5, asist2:3, asist3:1,
-  balon1:5, balon2:3, balon3:1,
+  bracket_final_cruce:50, bracket_final_gana:100, bracket_subcampeon:50,
+  bracket_tercero:60, bracket_cuarto:40,
+  campeon:100, semi:15, tercero:60,
+  premio_pos:50, premio_bonus:25,
   primer_gol_equipo:10, primer_gol_jugador:15, primer_gol_minuto:20,
 };
 
@@ -1343,9 +1342,10 @@ function _calcPointsRaw(player){
   });
   if(cmp(p.tercero,res.tercero)) add('clasif','3er puesto: '+p.tercero,getPts('tercero'));
 
-  // Premios (manual validation by admin)
+  // Premios (manual validation by admin) - posición exacta +50 acumulable, bonus +25
   ['gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3'].forEach(k=>{
-    if(res['validado_'+k]&&res['validado_'+k][player]) add('premios',k+': '+p[k],getPts(k));
+    if(res['validado_'+k]&&res['validado_'+k][player]) add('premios',k+' (exacto): '+p[k],getPts('premio_pos'));
+    if(res['bonus_'+k]&&res['bonus_'+k][player]) add('premios',k+' (bonus mejor puesto): '+p[k],getPts('premio_bonus'));
   });
 
   // Primer gol (manual)
@@ -1353,13 +1353,15 @@ function _calcPointsRaw(player){
   if(res.primer_gol_validado?.jugador?.[player]) add('premios','Primer gol (jugador)',getPts('primer_gol_jugador'));
   if(res.primer_gol_validado?.minuto?.[player]) add('premios','Primer gol (minuto)',getPts('primer_gol_minuto'));
 
-  // Grupos - calculado automáticamente desde tabla
+  // Grupos - calculado automáticamente desde tabla (1º-4º cada uno +10)
   const myTable=computeGroupTable(player);
   for(const g of Object.keys(GRUPOS)){
     const realTable=res['tabla_'+g];
     if(!realTable) continue;
     if(myTable[g]&&cmp(myTable[g][0],realTable[0])) add('grupos','Grupo '+g+' 1º: '+myTable[g][0],getPts('g1'));
     if(myTable[g]&&cmp(myTable[g][1],realTable[1])) add('grupos','Grupo '+g+' 2º: '+myTable[g][1],getPts('g2'));
+    if(myTable[g]&&realTable[2]&&cmp(myTable[g][2],realTable[2])) add('grupos','Grupo '+g+' 3º: '+myTable[g][2],getPts('g3'));
+    if(myTable[g]&&realTable[3]&&cmp(myTable[g][3],realTable[3])) add('grupos','Grupo '+g+' 4º: '+myTable[g][3],getPts('g4'));
   }
 
   // Terceros como pool
@@ -1467,6 +1469,13 @@ function _calcPointsRaw(player){
         if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
         if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
         if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
+        // Subcampeón (perdedor final) / 4º puesto (perdedor partido 3er puesto)
+        if(myPick&&myT1&&myT2){
+          const myLoser=cmp(myPick,myT1)?myT2:myT1;
+          const realLoser=realWinner&&realLocal&&realVisit?(cmp(realWinner,realLocal)?realVisit:realLocal):null;
+          if(isFinal&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','Subcampeón: '+myLoser,getPts('bracket_subcampeon'));
+          if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','4º puesto: '+myLoser,getPts('bracket_cuarto'));
+        }
       } else {
         if(cruce_ok) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
         if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Pasa '+m.id+': '+myPick,getPts('bracket_pasa'));
@@ -3604,7 +3613,9 @@ function renderNormas(){
     <div class="norma-section"><h3>📌 Fase de grupos</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('g1')}</span><span>Acertar el 1º de cada grupo (calculado de tus marcadores)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('g2')}</span><span>Acertar el 2º de cada grupo</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('terceros')}</span><span>Cada selección acertada entre los mejores terceros (pool de 8)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('g3')}</span><span>Acertar el 3º de cada grupo</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('g4')}</span><span>Acertar el 4º de cada grupo</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('terceros')}</span><span>Cada selección acertada entre los mejores terceros (pool de 8) — independiente de lo anterior</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_grupos')}</span><span>Resultado exacto de cualquier partido de grupos (90 min)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('quiniela')}</span><span>Acertar solo el 1/X/2 — ACUMULABLE con el exacto (máx +${getPts('exacto_grupos')+getPts('quiniela')} pts por partido)</span></div>
     </div>
@@ -3613,24 +3624,25 @@ function renderNormas(){
       <div class="norma-item"><span class="norma-pts">+${getPts('bracket_pasa')}</span><span>Acertar quién pasa ese partido del bracket</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('bracket_cruce')+getPts('bracket_pasa')}</span><span>Ambos (máx por partido de bracket)</span></div>
       <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')}</span><span>Acertar el cruce de la FINAL o del 3er puesto</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_gana')}</span><span>Acertar el ganador de la Final (adicional)</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_tercero')}</span><span>Acertar el 3er puesto (adicional)</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')+getPts('bracket_final_gana')+getPts('bracket_tercero')}</span><span>Máximo si aciertas todo de Final y 3er puesto</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_gana')}</span><span>Acertar el ganador de la Final (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_subcampeon')}</span><span>Acertar el subcampeón / perdedor de la Final (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_tercero')}</span><span>Acertar el 3er puesto (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_cuarto')}</span><span>Acertar el 4º puesto / perdedor partido 3er puesto (bracket)</span></div>
     </div>
     <div class="norma-section"><h3>📌 Fase eliminatoria (ronda a ronda)</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko')}</span><span>Resultado exacto KO (90min+prórroga) + acertar penaltis</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>Acertar marcador KO pero fallar ganador en penaltis</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
     </div>
-    <div class="norma-section"><h3>🏆 Clasificación final</h3>
+    <div class="norma-section"><h3>🏆 Clasificación final (pronóstico — independiente del bracket)</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('campeon')}</span><span>Acertar el campeón del Mundial</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('semi')}</span><span>Cada semifinalista acertado (pool de 4, sin orden)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('tercero')}</span><span>Acertar el 3er puesto</span></div>
+      <div class="norma-item"><span style="font-size:11px;color:var(--t3)">⚠️ Campeón y 3er puesto puntúan AQUÍ y TAMBIÉN en el Bracket — son acumulables si coinciden</span></div>
     </div>
-    <div class="norma-section"><h3>⚽ Premios individuales</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('gol1')}/${getPts('gol2')}/${getPts('gol3')}</span><span>1er/2º/3er máximo goleador</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('asist1')}/${getPts('asist2')}/${getPts('asist3')}</span><span>1er/2º/3er máximo asistente</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('balon1')}/${getPts('balon2')}/${getPts('balon3')}</span><span>Balón de Oro/Plata/Bronce</span></div>
+    <div class="norma-section"><h3>⚽ Premios individuales (top 3)</h3>
+      <div class="norma-item"><span class="norma-pts">+${getPts('premio_pos')}</span><span>Por cada posición exacta (1º, 2º o 3º) acertada en Goleador/Asistente/Balón de Oro — acumulable</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('premio_bonus')}</span><span>Bonus si tu jugador queda en mejor posición de la que dijiste (solo hacia arriba)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_equipo')}</span><span>Acertar el equipo del primer gol del Mundial</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_jugador')}</span><span>Acertar el jugador del primer gol</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_minuto')}</span><span>Acertar el minuto exacto del primer gol</span></div>
@@ -3814,12 +3826,16 @@ function renderAdmin(){
   }).join('');
 
   // Premios individuales validation
-  const premiosValHtml=['gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].map(key=>{
+  const premiosTop3=['gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3'];
+  const premiosOtros=['primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'];
+  const premiosValHtml=[...premiosTop3,...premiosOtros].map(key=>{
     const validado=res['validado_'+key]||{};
+    const bonus=res['bonus_'+key]||{};
+    const isTop3=premiosTop3.includes(key);
     return `<div style="margin-bottom:10px;background:var(--s2);border-radius:8px;padding:10px">
       <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">${key}</div>
       <div class="res-row"><label>Valor real</label><input type="text" class="fi" id="ar-real_${key}" value="${esc(res['real_'+key]||'')}" placeholder="Nombre..."></div>
-      <div style="font-size:11px;color:var(--t2);margin-bottom:4px">¿Quién acertó?</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:4px">¿Quién acertó${isTop3?' (exacto, +'+getPts('premio_pos')+')':''}?</div>
       ${Object.keys(players).map(name=>{
         const pp=pronosticos[name]||{};
         const myVal=pp[key]||pp['primer_gol']?.[key.replace('primer_gol_','')];
@@ -3828,6 +3844,13 @@ function renderAdmin(){
           <span>${name}: <em style="color:var(--t2)">${myVal||'—'}</em></span>
         </label>`;
       }).join('')}
+      ${isTop3?`<div style="font-size:11px;color:var(--t2);margin-top:8px;margin-bottom:4px">¿Bonus "quedó mejor de lo dicho" (+${getPts('premio_bonus')})?</div>
+      ${Object.keys(players).map(name=>{
+        return `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="bonus-${key}-${name}" ${bonus[name]?'checked':''}>
+          <span>${name}</span>
+        </label>`;
+      }).join('')}`:''}
       <button class="btn btn-p btn-xs" style="margin-top:6px" onclick="guardarValidacion('${key}')">Guardar</button>
     </div>`;
   }).join('');
@@ -4206,7 +4229,7 @@ function renderAdmin(){
     </div></div>
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec4')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚙️ Sistema de puntos</h3><span class="admin-sec-arrow" id="adminarrow-sec4">▼</span></div><div class="admin-sec-body" id="adminsec-sec4">
       <div class="pts-grid">
-        ${['campeon','semi','tercero','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','terceros','gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].map(k=>ptsField(k,k)).join('')}
+        ${['campeon','semi','tercero','bracket_subcampeon','bracket_cuarto','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','g3','g4','terceros','premio_pos','premio_bonus','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].map(k=>ptsField(k,k)).join('')}
       </div>
       <div style="margin-top:10px;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;margin-bottom:8px">
         <div style="font-size:11px;color:#4ade80;font-weight:700;margin-bottom:6px">✨ Nuevos valores (junio 2026)</div>
@@ -4439,13 +4462,16 @@ window.toggleBracketLock=async function(){
 };
 
 window.guardarPuntos=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res.pts) res.pts={};
-  ['campeon','semi','tercero','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','terceros','gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].forEach(k=>{
+  ['campeon','semi','tercero','bracket_subcampeon','bracket_cuarto','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','g3','g4','terceros','premio_pos','premio_bonus','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].forEach(k=>{
     const el=document.getElementById('pts-'+k); if(el) res.pts[k]=Number(el.value);
   });
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Puntos actualizados. El ranking se recalcula automáticamente.');
+  calcPoints._cache={};
+  showToast('✅ Puntos actualizados');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarTablas=async function(){
@@ -4469,16 +4495,22 @@ window.guardarTerceros=async function(){
 };
 
 window.guardarValidacion=async function(key){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res['validado_'+key]) res['validado_'+key]={};
+  if(!res['bonus_'+key]) res['bonus_'+key]={};
   const realVal=document.getElementById('ar-real_'+key)?.value.trim();
   if(realVal) res['real_'+key]=realVal;
   Object.keys(players).forEach(name=>{
     const cb=document.getElementById('val-'+key+'-'+name);
     if(cb) res['validado_'+key][name]=cb.checked;
+    const bcb=document.getElementById('bonus-'+key+'-'+name);
+    if(bcb) res['bonus_'+key][name]=bcb.checked;
   });
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Validación guardada');
+  calcPoints._cache={};
+  showToast('✅ Validación guardada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.borrarResultado=async function(matchId){
@@ -6073,15 +6105,14 @@ const AVATARS = {
 
 // Default points
 const PTS_DEFAULT = {
-  g1:20, g2:15, terceros:8,
+  g1:10, g2:10, g3:10, g4:10, terceros:8,
   exacto_grupos:20, quiniela:10,
   exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
   bracket_cruce:15, bracket_pasa:10,
-  bracket_final_cruce:50, bracket_final_gana:15, bracket_tercero:10,
-  campeon:20, semi:15, tercero:10,
-  gol1:5, gol2:3, gol3:1,
-  asist1:5, asist2:3, asist3:1,
-  balon1:5, balon2:3, balon3:1,
+  bracket_final_cruce:50, bracket_final_gana:100, bracket_subcampeon:50,
+  bracket_tercero:60, bracket_cuarto:40,
+  campeon:100, semi:15, tercero:60,
+  premio_pos:50, premio_bonus:25,
   primer_gol_equipo:10, primer_gol_jugador:15, primer_gol_minuto:20,
 };
 
@@ -6566,9 +6597,10 @@ function _calcPointsRaw(player){
   });
   if(cmp(p.tercero,res.tercero)) add('clasif','3er puesto: '+p.tercero,getPts('tercero'));
 
-  // Premios (manual validation by admin)
+  // Premios (manual validation by admin) - posición exacta +50 acumulable, bonus +25
   ['gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3'].forEach(k=>{
-    if(res['validado_'+k]&&res['validado_'+k][player]) add('premios',k+': '+p[k],getPts(k));
+    if(res['validado_'+k]&&res['validado_'+k][player]) add('premios',k+' (exacto): '+p[k],getPts('premio_pos'));
+    if(res['bonus_'+k]&&res['bonus_'+k][player]) add('premios',k+' (bonus mejor puesto): '+p[k],getPts('premio_bonus'));
   });
 
   // Primer gol (manual)
@@ -6576,13 +6608,15 @@ function _calcPointsRaw(player){
   if(res.primer_gol_validado?.jugador?.[player]) add('premios','Primer gol (jugador)',getPts('primer_gol_jugador'));
   if(res.primer_gol_validado?.minuto?.[player]) add('premios','Primer gol (minuto)',getPts('primer_gol_minuto'));
 
-  // Grupos - calculado automáticamente desde tabla
+  // Grupos - calculado automáticamente desde tabla (1º-4º cada uno +10)
   const myTable=computeGroupTable(player);
   for(const g of Object.keys(GRUPOS)){
     const realTable=res['tabla_'+g];
     if(!realTable) continue;
     if(myTable[g]&&cmp(myTable[g][0],realTable[0])) add('grupos','Grupo '+g+' 1º: '+myTable[g][0],getPts('g1'));
     if(myTable[g]&&cmp(myTable[g][1],realTable[1])) add('grupos','Grupo '+g+' 2º: '+myTable[g][1],getPts('g2'));
+    if(myTable[g]&&realTable[2]&&cmp(myTable[g][2],realTable[2])) add('grupos','Grupo '+g+' 3º: '+myTable[g][2],getPts('g3'));
+    if(myTable[g]&&realTable[3]&&cmp(myTable[g][3],realTable[3])) add('grupos','Grupo '+g+' 4º: '+myTable[g][3],getPts('g4'));
   }
 
   // Terceros como pool
@@ -6646,6 +6680,13 @@ function _calcPointsRaw(player){
         if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
         if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
         if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
+        // Subcampeón (perdedor final) / 4º puesto (perdedor partido 3er puesto)
+        if(myPick&&myT1&&myT2){
+          const myLoser=cmp(myPick,myT1)?myT2:myT1;
+          const realLoser=realWinner&&realLocal&&realVisit?(cmp(realWinner,realLocal)?realVisit:realLocal):null;
+          if(isFinal&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','Subcampeón: '+myLoser,getPts('bracket_subcampeon'));
+          if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','4º puesto: '+myLoser,getPts('bracket_cuarto'));
+        }
       } else {
         if(cruce_ok) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
         if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Pasa '+m.id+': '+myPick,getPts('bracket_pasa'));
@@ -7075,7 +7116,9 @@ function renderNormas(){
     <div class="norma-section"><h3>📌 Fase de grupos</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('g1')}</span><span>Acertar el 1º de cada grupo (calculado de tus marcadores)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('g2')}</span><span>Acertar el 2º de cada grupo</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('terceros')}</span><span>Cada selección acertada entre los mejores terceros (pool de 8)</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('g3')}</span><span>Acertar el 3º de cada grupo</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('g4')}</span><span>Acertar el 4º de cada grupo</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('terceros')}</span><span>Cada selección acertada entre los mejores terceros (pool de 8) — independiente de lo anterior</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_grupos')}</span><span>Resultado exacto de cualquier partido de grupos (90 min)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('quiniela')}</span><span>Acertar solo el 1/X/2 — ACUMULABLE con el exacto (máx +${getPts('exacto_grupos')+getPts('quiniela')} pts por partido)</span></div>
     </div>
@@ -7084,24 +7127,25 @@ function renderNormas(){
       <div class="norma-item"><span class="norma-pts">+${getPts('bracket_pasa')}</span><span>Acertar quién pasa ese partido del bracket</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('bracket_cruce')+getPts('bracket_pasa')}</span><span>Ambos (máx por partido de bracket)</span></div>
       <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')}</span><span>Acertar el cruce de la FINAL o del 3er puesto</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_gana')}</span><span>Acertar el ganador de la Final (adicional)</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_tercero')}</span><span>Acertar el 3er puesto (adicional)</span></div>
-      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_cruce')+getPts('bracket_final_gana')+getPts('bracket_tercero')}</span><span>Máximo si aciertas todo de Final y 3er puesto</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_final_gana')}</span><span>Acertar el ganador de la Final (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_subcampeon')}</span><span>Acertar el subcampeón / perdedor de la Final (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_tercero')}</span><span>Acertar el 3er puesto (bracket)</span></div>
+      <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_cuarto')}</span><span>Acertar el 4º puesto / perdedor partido 3er puesto (bracket)</span></div>
     </div>
     <div class="norma-section"><h3>📌 Fase eliminatoria (ronda a ronda)</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko')}</span><span>Resultado exacto KO (90min+prórroga) + acertar penaltis</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>Acertar marcador KO pero fallar ganador en penaltis</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
     </div>
-    <div class="norma-section"><h3>🏆 Clasificación final</h3>
+    <div class="norma-section"><h3>🏆 Clasificación final (pronóstico — independiente del bracket)</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('campeon')}</span><span>Acertar el campeón del Mundial</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('semi')}</span><span>Cada semifinalista acertado (pool de 4, sin orden)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('tercero')}</span><span>Acertar el 3er puesto</span></div>
+      <div class="norma-item"><span style="font-size:11px;color:var(--t3)">⚠️ Campeón y 3er puesto puntúan AQUÍ y TAMBIÉN en el Bracket — son acumulables si coinciden</span></div>
     </div>
-    <div class="norma-section"><h3>⚽ Premios individuales</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('gol1')}/${getPts('gol2')}/${getPts('gol3')}</span><span>1er/2º/3er máximo goleador</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('asist1')}/${getPts('asist2')}/${getPts('asist3')}</span><span>1er/2º/3er máximo asistente</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('balon1')}/${getPts('balon2')}/${getPts('balon3')}</span><span>Balón de Oro/Plata/Bronce</span></div>
+    <div class="norma-section"><h3>⚽ Premios individuales (top 3)</h3>
+      <div class="norma-item"><span class="norma-pts">+${getPts('premio_pos')}</span><span>Por cada posición exacta (1º, 2º o 3º) acertada en Goleador/Asistente/Balón de Oro — acumulable</span></div>
+      <div class="norma-item"><span class="norma-pts">+${getPts('premio_bonus')}</span><span>Bonus si tu jugador queda en mejor posición de la que dijiste (solo hacia arriba)</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_equipo')}</span><span>Acertar el equipo del primer gol del Mundial</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_jugador')}</span><span>Acertar el jugador del primer gol</span></div>
       <div class="norma-item"><span class="norma-pts">+${getPts('primer_gol_minuto')}</span><span>Acertar el minuto exacto del primer gol</span></div>
@@ -7266,13 +7310,16 @@ window.toggleBracketLock=async function(){
 };
 
 window.guardarPuntos=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res.pts) res.pts={};
-  ['campeon','semi','tercero','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','terceros','gol1','gol2','gol3','asist1','asist2','asist3','balon1','balon2','balon3','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].forEach(k=>{
+  ['campeon','semi','tercero','bracket_subcampeon','bracket_cuarto','exacto_grupos','quiniela','exacto_ko','exacto_ko_pen','pasa_ronda','bracket','g1','g2','g3','g4','terceros','premio_pos','premio_bonus','primer_gol_equipo','primer_gol_jugador','primer_gol_minuto'].forEach(k=>{
     const el=document.getElementById('pts-'+k); if(el) res.pts[k]=Number(el.value);
   });
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Puntos actualizados. El ranking se recalcula automáticamente.');
+  calcPoints._cache={};
+  showToast('✅ Puntos actualizados');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarTablas=async function(){
@@ -7296,16 +7343,22 @@ window.guardarTerceros=async function(){
 };
 
 window.guardarValidacion=async function(key){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res['validado_'+key]) res['validado_'+key]={};
+  if(!res['bonus_'+key]) res['bonus_'+key]={};
   const realVal=document.getElementById('ar-real_'+key)?.value.trim();
   if(realVal) res['real_'+key]=realVal;
   Object.keys(players).forEach(name=>{
     const cb=document.getElementById('val-'+key+'-'+name);
     if(cb) res['validado_'+key][name]=cb.checked;
+    const bcb=document.getElementById('bonus-'+key+'-'+name);
+    if(bcb) res['bonus_'+key][name]=bcb.checked;
   });
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Validación guardada');
+  calcPoints._cache={};
+  showToast('✅ Validación guardada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.borrarResultado=async function(matchId){
