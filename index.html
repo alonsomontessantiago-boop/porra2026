@@ -4475,13 +4475,19 @@ window.guardarPuntos=async function(){
 };
 
 window.guardarTablas=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   for(const g of Object.keys(GRUPOS)){
-    const order=GRUPOS[g].map((_,i)=>{const el=document.getElementById('ar-tabla_'+g+'_'+i);return el?el.value:'';}).filter(Boolean);
-    if(order.length) res['tabla_'+g]=order;
+    // No usar filter(Boolean) — eso compacta los huecos y desplaza posiciones (bug).
+    // Cada posición se guarda en su índice exacto, aunque las anteriores estén vacías.
+    const order=GRUPOS[g].map((_,i)=>{const el=document.getElementById('ar-tabla_'+g+'_'+i);return el?el.value:'';});
+    const hasAny=order.some(Boolean);
+    if(hasAny) res['tabla_'+g]=order;
   }
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Tablas guardadas');
+  calcPoints._cache={};
+  showToast('✅ Tablas guardadas');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarTerceros=async function(){
@@ -7323,13 +7329,19 @@ window.guardarPuntos=async function(){
 };
 
 window.guardarTablas=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   for(const g of Object.keys(GRUPOS)){
-    const order=GRUPOS[g].map((_,i)=>{const el=document.getElementById('ar-tabla_'+g+'_'+i);return el?el.value:'';}).filter(Boolean);
-    if(order.length) res['tabla_'+g]=order;
+    // No usar filter(Boolean) — eso compacta los huecos y desplaza posiciones (bug).
+    // Cada posición se guarda en su índice exacto, aunque las anteriores estén vacías.
+    const order=GRUPOS[g].map((_,i)=>{const el=document.getElementById('ar-tabla_'+g+'_'+i);return el?el.value:'';});
+    const hasAny=order.some(Boolean);
+    if(hasAny) res['tabla_'+g]=order;
   }
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Tablas guardadas');
+  calcPoints._cache={};
+  showToast('✅ Tablas guardadas');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarTerceros=async function(){
