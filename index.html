@@ -1076,26 +1076,29 @@ async function loadPlayers(){
     players={};
     snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
     calcPoints._cache={};
-    await loadAllPronos();
+    // Renderizar el login YA con la caché de puntos (no bloquear esperando todos los pronósticos)
     renderLogin();
+    // Cargar pronósticos completos en paralelo, sin bloquear la pantalla de login
+    loadAllPronos().then(()=>{ renderLogin(); if(isActive('ranking')) renderRanking(); });
   }catch(e){ console.warn('Initial getDocs failed:',e); }
   // Then activate real-time listener
   onSnapshot(collection(db,"players"),async snap=>{
     players={};
     snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
-    await loadAllPronos();
     renderLogin();
-    if(isActive('ranking')) renderRanking();
+    loadAllPronos().then(()=>{ renderLogin(); if(isActive('ranking')) renderRanking(); });
   });
 }
 
 async function loadAllPronos(){
-  for(const name of Object.keys(players)){
-    if(!pronosticos[name]){
-      const d=await getDoc(doc(db,"pronos",name));
-      pronosticos[name]=d.exists()?d.data():{};
-    }
-  }
+  // Cargar todos los pronósticos en PARALELO en vez de secuencial (era el cuello de botella del arranque)
+  const pending=Object.keys(players).filter(name=>!pronosticos[name]);
+  if(pending.length===0) return;
+  const results=await Promise.all(pending.map(name=>getDoc(doc(db,"pronos",name))));
+  pending.forEach((name,i)=>{
+    const d=results[i];
+    pronosticos[name]=d.exists()?d.data():{};
+  });
 }
 
 async function listenMeta(){
@@ -1117,6 +1120,7 @@ async function listenMeta(){
   onSnapshot(doc(db,"meta","resultados"),d=>{
     resultados=d.exists()?d.data():{};
     calcPoints._cache={};
+    startFaseDeadlineChecker();
     if(isActive('ranking')){ renderRanking(); renderPartidoDelDia(); renderAvisoRanking(); renderEvolucion();
   fixStickyOffsets();
   if(!window._firstLoad){
@@ -2018,7 +2022,16 @@ function renderPronosticos(){
     if(!abierta) return `<div class="phase-hdr">${phaseLabel}</div>
       <div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;color:var(--t3);font-size:13px">🔒 Ronda bloqueada</div>`;
     const matches=ALL_BRACKET.filter(m=>m.phase===phase);
-    return `<div class="phase-hdr open">${phaseLabel} — ABIERTA ✓</div>
+    const dl=res['fase_'+phase+'_deadline'];
+    let dlHtml='';
+    if(dl){
+      const diff=new Date(dl)-new Date();
+      if(diff>0){
+        const dh=Math.floor(diff/3600000),dm=Math.floor((diff%3600000)/60000);
+        dlHtml=' · ⏱ cierra en '+(dh>0?dh+'h ':'')+dm+'min';
+      }
+    }
+    return `<div class="phase-hdr open">${phaseLabel} — ABIERTA ✓${dlHtml}</div>
       ${matches.map(m=>{
         const k='KO_'+m.id;
         const pm=p.partidos?.[k]||{};
@@ -2049,8 +2062,42 @@ function renderPronosticos(){
       }).join('')}`;
   }).join('');
 
-  document.getElementById('prono-content').innerHTML=`
-    ${locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':''}
+  // Detectar si hay alguna fase eliminatoria abierta (para resaltar la pestaña)
+  const hayFaseElimAbierta=['R32','R16','QF','SF','3RD','FINAL'].some(f=>res['fase_'+f+'_abierta']);
+  const pronoTab=window._pronoTab||'grupos';
+
+  function pTabBtn(id,label,badge){
+    const sel=pronoTab===id;
+    return `<button data-ptab="${id}" onclick="window._pronoTab=this.dataset.ptab;renderPronosticos()" style="flex:1;padding:10px 4px;border-radius:8px;border:2px solid ${sel?'var(--purple)':'var(--brd)'};background:${sel?'rgba(139,92,246,.15)':'var(--s2)'};color:${sel?'#c084fc':'var(--t2)'};font-size:12px;font-weight:700;cursor:pointer;position:relative">
+      ${label}${badge?`<span style="position:absolute;top:-4px;right:-4px;background:#f87171;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px">${badge}</span>`:''}
+    </button>`;
+  }
+
+  const pronoTabsHtml=`<div style="display:flex;gap:6px;margin-bottom:14px">
+    ${pTabBtn('grupos','📊 Grupos')}
+    ${pTabBtn('elim','🎯 Eliminatorias',hayFaseElimAbierta?'!':null)}
+    ${pTabBtn('clasif','🏆 Clasificación')}
+  </div>`;
+
+  const grupTabContent=`
+    <div class="card">
+      <div class="card-title">📊 Resultados grupos — tu tabla se calcula automáticamente</div>
+      <p class="note">Introduce los marcadores de los 72 partidos. La app calcula la tabla de cada grupo.</p>
+      ${gruposHtml}
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 Mejores terceros que pasan (pool de 8, +${getPts('terceros')} pt c/u)</div>
+      <p class="note">Elige los 8 equipos que crees que pasarán como mejores terceros. Sin orden.</p>
+      <div class="field-row4">${tercerosHtml}</div>
+    </div>`;
+
+  const elimTabContent=`
+    <div class="card">
+      <div class="card-title">🎯 Fase eliminatoria — marcadores + quién pasa</div>
+      ${koHtml}
+    </div>`;
+
+  const clasifTabContent=`
     <div class="card">
       <div class="card-title">🏆 Clasificación final</div>
       <div class="field"><label>Campeón (+${getPts('campeon')} pts)</label>
@@ -2070,21 +2117,14 @@ function renderPronosticos(){
         <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
       ${['balon1','balon2','balon3'].map((k,i)=>`<div class="field"><label>Balón de ${['Oro','Plata','Bronce'][i]} (+${getPts(k)} pts)</label>
         <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
-    </div>
-    <div class="card">
-      <div class="card-title">📊 Resultados grupos — tu tabla se calcula automáticamente</div>
-      <p class="note">Introduce los marcadores de los 72 partidos. La app calcula la tabla de cada grupo.</p>
-      ${gruposHtml}
-    </div>
-    <div class="card">
-      <div class="card-title">🎯 Mejores terceros que pasan (pool de 8, +${getPts('terceros')} pt c/u)</div>
-      <p class="note">Elige los 8 equipos que crees que pasarán como mejores terceros. Sin orden.</p>
-      <div class="field-row4">${tercerosHtml}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">🎯 Fase eliminatoria — marcadores + quién pasa</div>
-      ${koHtml}
-    </div>
+    </div>`;
+
+  const tabContent=pronoTab==='grupos'?grupTabContent:pronoTab==='elim'?elimTabContent:clasifTabContent;
+
+  document.getElementById('prono-content').innerHTML=`
+    ${locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':''}
+    ${pronoTabsHtml}
+    ${tabContent}
     ${!locked?`<div style="padding-bottom:20px">
       <button class="btn btn-p btn-w" onclick="guardarPronosticos()">💾 Guardar mis pronósticos</button>
       <div id="save-ok" class="saved-ok">✅ Guardado</div>
@@ -3790,11 +3830,12 @@ function renderAdmin(){
     </div>`;
   }).join('');
 
-  // KO admin
-  const koAdminHtml=getAllBracket().map(m=>{
+  // KO admin — ORDENADO CRONOLÓGICAMENTE por fecha real del partido
+  const koAdminHtml=[...getAllBracket()].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(m=>{
     const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=res.koNames?.[k]||{};
+    const fechaLabel=m.date?fmtDate(m.date).split(',')[0]:'';
     return `<div class="ko-block">
-      <div class="lbl">${m.phase} — ${m.id} (${m.desc})</div>
+      <div class="lbl">${fechaLabel?'📅 '+fechaLabel+' · ':''}${m.phase} — ${m.id} (${m.desc})${m.venue?' · '+m.venue:''}</div>
       <div class="row">
         <input type="text" id="ko-${k}-local" value="${esc(kn.local||'')}" placeholder="Equipo local real">
         <input type="text" id="ko-${k}-visit" value="${esc(kn.visit||'')}" placeholder="Equipo visitante real">
@@ -3855,20 +3896,37 @@ function renderAdmin(){
     </div>`;
   }).join('');
 
-  // Fases toggle
+  // Fases toggle — con deadline y cuenta atrás
   const fasesHtml=['R32','R16','QF','SF','3RD','FINAL'].map(fase=>{
     const fk='fase_'+fase+'_abierta'; const abierta=res[fk];
+    const dlKey='fase_'+fase+'_deadline'; const deadline=res[dlKey];
     const faseLabel={R32:'Dieciseisavos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'}[fase];
-    return `<div style="background:var(--s2);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:13px;font-weight:700">${faseLabel}</div>
-        <span class="badge ${abierta?'badge-open':'badge-lock'}">${abierta?'Abierta':'Cerrada'}</span>
+    let cdHtml='';
+    if(abierta&&deadline){
+      const diff=new Date(deadline)-new Date();
+      if(diff>0){
+        const dh=Math.floor(diff/3600000),dm=Math.floor((diff%3600000)/60000);
+        cdHtml='<div style="font-size:11px;color:var(--t2);margin-top:2px">⏱ Cierra en '+(dh>0?dh+'h ':'')+dm+'min · '+new Date(deadline).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div>';
+      } else {
+        cdHtml='<div style="font-size:11px;color:#f87171;margin-top:2px">⏱ Plazo vencido (se cerrará sola)</div>';
+      }
+    }
+    return `<div style="background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${faseLabel}</div>
+          <span class="badge ${abierta?'badge-open':'badge-lock'}">${abierta?'Abierta':'Cerrada'}</span>
+          ${cdHtml}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${abierta
+            ?`<button class="btn-xs btn-danger" onclick="toggleFase('${fase}',false)">🔒 Cerrar</button>`
+            :`<button class="btn-xs btn-g" onclick="toggleFase('${fase}',true)">🔓 Abrir</button>`}
+        </div>
       </div>
-      <div style="display:flex;gap:6px">
-        ${abierta
-          ?`<button class="btn-xs btn-danger" onclick="toggleFase('${fase}',false)">🔒 Cerrar</button>`
-          :`<button class="btn-xs btn-g" onclick="toggleFase('${fase}',true)">🔓 Abrir</button>`}
-      </div>
+      ${!abierta
+        ?`<div style="display:flex;gap:6px"><input type="datetime-local" id="fase-dl-${fase}" class="fi" style="flex:1;font-size:12px"></div>`
+        :`<div style="display:flex;gap:6px"><input type="datetime-local" id="fase-extend-${fase}" class="fi" style="flex:1;font-size:12px"><button class="btn-xs btn-s" onclick="extenderFase('${fase}')">⏱ Extender</button></div>`}
     </div>`;
   }).join('');
 
@@ -4448,12 +4506,49 @@ window.borrarDeadline=async function(){
 };
 
 window.toggleFase=async function(fase,abrir){
-  if(!confirm(abrir?`¿Abrir "${fase}" para pronósticos?`:`¿Cerrar "${fase}"?`)) return;
-  const res={...resultados};
-  res['fase_'+fase+'_abierta']=abrir;
+  const res=JSON.parse(JSON.stringify(resultados));
+  if(abrir){
+    const dl=document.getElementById('fase-dl-'+fase)?.value;
+    if(!dl){ alert('Indica una fecha límite antes de abrir la fase'); return; }
+    if(!confirm('¿Abrir "'+fase+'" para pronósticos hasta '+new Date(dl).toLocaleString('es-ES')+'?')) return;
+    res['fase_'+fase+'_abierta']=true;
+    res['fase_'+fase+'_deadline']=new Date(dl).toISOString();
+  } else {
+    if(!confirm('¿Cerrar "'+fase+'" ahora?')) return;
+    res['fase_'+fase+'_abierta']=false;
+  }
   await setDoc(doc(db,'meta','resultados'),res);
+  showToast(abrir?'🔓 Fase abierta':'🔒 Fase cerrada');
   renderAdmin();
 };
+
+window.extenderFase=async function(fase){
+  const dl=document.getElementById('fase-extend-'+fase)?.value;
+  if(!dl){ alert('Indica una nueva fecha'); return; }
+  const res=JSON.parse(JSON.stringify(resultados));
+  res['fase_'+fase+'_deadline']=new Date(dl).toISOString();
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('⏱ Plazo extendido');
+  renderAdmin();
+};
+
+function startFaseDeadlineChecker(){
+  clearInterval(window._faseDeadlineInterval);
+  window._faseDeadlineInterval=setInterval(function(){
+    if(!isAdmin) return; // Solo el admin dispara el cierre automático para evitar carreras entre clientes
+    const fases=['R32','R16','QF','SF','3RD','FINAL'];
+    fases.forEach(async function(fase){
+      const abierta=resultados['fase_'+fase+'_abierta'];
+      const dl=resultados['fase_'+fase+'_deadline'];
+      if(abierta && dl && new Date()>new Date(dl)){
+        const res=JSON.parse(JSON.stringify(resultados));
+        res['fase_'+fase+'_abierta']=false;
+        await setDoc(doc(db,'meta','resultados'),res);
+        showToast('🔒 '+fase+' cerrada automáticamente (plazo terminado)');
+      }
+    });
+  },20000); // Check cada 20 segundos
+}
 
 window.toggleBracketLock=async function(){
   const res={...resultados};
@@ -6348,26 +6443,29 @@ async function loadPlayers(){
     const snap=await getDocs(collection(db,"players"));
     players={};
     snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
-    await loadAllPronos();
+    // Renderizar el login YA con la caché de puntos (no bloquear esperando todos los pronósticos)
     renderLogin();
+    // Cargar pronósticos completos en paralelo, sin bloquear la pantalla de login
+    loadAllPronos().then(()=>{ renderLogin(); if(isActive('ranking')) renderRanking(); });
   }catch(e){ console.warn('Initial getDocs failed:',e); }
   // Then activate real-time listener
   onSnapshot(collection(db,"players"),async snap=>{
     players={};
     snap.docs.forEach(d=>{ if(!d.data().deleted) players[d.id]=d.data(); });
-    await loadAllPronos();
     renderLogin();
-    if(isActive('ranking')) renderRanking();
+    loadAllPronos().then(()=>{ renderLogin(); if(isActive('ranking')) renderRanking(); });
   });
 }
 
 async function loadAllPronos(){
-  for(const name of Object.keys(players)){
-    if(!pronosticos[name]){
-      const d=await getDoc(doc(db,"pronos",name));
-      pronosticos[name]=d.exists()?d.data():{};
-    }
-  }
+  // Cargar todos los pronósticos en PARALELO en vez de secuencial (era el cuello de botella del arranque)
+  const pending=Object.keys(players).filter(name=>!pronosticos[name]);
+  if(pending.length===0) return;
+  const results=await Promise.all(pending.map(name=>getDoc(doc(db,"pronos",name))));
+  pending.forEach((name,i)=>{
+    const d=results[i];
+    pronosticos[name]=d.exists()?d.data():{};
+  });
 }
 
 async function listenMeta(){
@@ -7302,12 +7400,49 @@ window.borrarDeadline=async function(){
 };
 
 window.toggleFase=async function(fase,abrir){
-  if(!confirm(abrir?`¿Abrir "${fase}" para pronósticos?`:`¿Cerrar "${fase}"?`)) return;
-  const res={...resultados};
-  res['fase_'+fase+'_abierta']=abrir;
+  const res=JSON.parse(JSON.stringify(resultados));
+  if(abrir){
+    const dl=document.getElementById('fase-dl-'+fase)?.value;
+    if(!dl){ alert('Indica una fecha límite antes de abrir la fase'); return; }
+    if(!confirm('¿Abrir "'+fase+'" para pronósticos hasta '+new Date(dl).toLocaleString('es-ES')+'?')) return;
+    res['fase_'+fase+'_abierta']=true;
+    res['fase_'+fase+'_deadline']=new Date(dl).toISOString();
+  } else {
+    if(!confirm('¿Cerrar "'+fase+'" ahora?')) return;
+    res['fase_'+fase+'_abierta']=false;
+  }
   await setDoc(doc(db,'meta','resultados'),res);
+  showToast(abrir?'🔓 Fase abierta':'🔒 Fase cerrada');
   renderAdmin();
 };
+
+window.extenderFase=async function(fase){
+  const dl=document.getElementById('fase-extend-'+fase)?.value;
+  if(!dl){ alert('Indica una nueva fecha'); return; }
+  const res=JSON.parse(JSON.stringify(resultados));
+  res['fase_'+fase+'_deadline']=new Date(dl).toISOString();
+  await setDoc(doc(db,'meta','resultados'),res);
+  showToast('⏱ Plazo extendido');
+  renderAdmin();
+};
+
+function startFaseDeadlineChecker(){
+  clearInterval(window._faseDeadlineInterval);
+  window._faseDeadlineInterval=setInterval(function(){
+    if(!isAdmin) return; // Solo el admin dispara el cierre automático para evitar carreras entre clientes
+    const fases=['R32','R16','QF','SF','3RD','FINAL'];
+    fases.forEach(async function(fase){
+      const abierta=resultados['fase_'+fase+'_abierta'];
+      const dl=resultados['fase_'+fase+'_deadline'];
+      if(abierta && dl && new Date()>new Date(dl)){
+        const res=JSON.parse(JSON.stringify(resultados));
+        res['fase_'+fase+'_abierta']=false;
+        await setDoc(doc(db,'meta','resultados'),res);
+        showToast('🔒 '+fase+' cerrada automáticamente (plazo terminado)');
+      }
+    });
+  },20000); // Check cada 20 segundos
+}
 
 window.toggleBracketLock=async function(){
   const res={...resultados};
