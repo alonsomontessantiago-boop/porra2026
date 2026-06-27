@@ -3830,22 +3830,40 @@ function renderAdmin(){
     </div>`;
   }).join('');
 
-  // KO admin — ORDENADO CRONOLÓGICAMENTE por fecha real del partido
-  const koAdminHtml=[...getAllBracket()].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(m=>{
-    const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=res.koNames?.[k]||{};
-    const fechaLabel=m.date?fmtDate(m.date).split(',')[0]:'';
-    return `<div class="ko-block">
-      <div class="lbl">${fechaLabel?'📅 '+fechaLabel+' · ':''}${m.phase} — ${m.id} (${m.desc})${m.venue?' · '+m.venue:''}</div>
-      <div class="row">
-        <input type="text" id="ko-${k}-local" value="${esc(kn.local||'')}" placeholder="Equipo local real">
-        <input type="text" id="ko-${k}-visit" value="${esc(kn.visit||'')}" placeholder="Equipo visitante real">
+  // KO admin — AGRUPADO POR FASE (R32/R16/QF/SF/3RD/FINAL), orden cronológico DENTRO de cada fase
+  const KO_PHASE_LABELS={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'};
+  const KO_PHASE_ORDER=['R32','R16','QF','SF','3RD','FINAL'];
+  const koAdminHtml=KO_PHASE_ORDER.map(phase=>{
+    const matches=getAllBracket().filter(m=>m.phase===phase).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    if(matches.length===0) return '';
+    const total=matches.length;
+    const conResultado=matches.filter(m=>{const rm=partidos['KO_'+m.id]||{}; return rm.gl!=null&&rm.gv!=null;}).length;
+    const secId='koph-'+phase;
+    const matchesHtml=matches.map(m=>{
+      const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=res.koNames?.[k]||{};
+      const fechaLabel=m.date?fmtDate(m.date).split(',')[0]:'';
+      return `<div class="ko-block">
+        <div class="lbl">${fechaLabel?'📅 '+fechaLabel+' · ':''}${m.id} (${m.desc})${m.venue?' · '+m.venue:''}</div>
+        <div class="row">
+          <input type="text" id="ko-${k}-local" value="${esc(kn.local||'')}" placeholder="Equipo local real">
+          <input type="text" id="ko-${k}-visit" value="${esc(kn.visit||'')}" placeholder="Equipo visitante real">
+        </div>
+        <div class="row">
+          <input type="number" min="0" max="20" class="si" id="ko-${k}-gl" value="${rm.gl??''}" placeholder="?">
+          <span class="score-dash">-</span>
+          <input type="number" min="0" max="20" class="si" id="ko-${k}-gv" value="${rm.gv??''}" placeholder="?">
+          <input type="text" id="ko-${k}-pen" value="${esc(rm.pen||'')}" placeholder="Pen? ej: España" style="flex:1">
+          <input type="text" id="ko-${k}-gan" value="${esc(rm.ganador||'')}" placeholder="Ganador real" style="flex:1">
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px;border-radius:10px;overflow:hidden">
+      <div class="admin-sec-hdr" onclick="toggleAdminSec('${secId}')" style="background:var(--s2);padding:10px 12px;border-radius:10px 10px 0 0;margin-bottom:0">
+        <h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚽ ${KO_PHASE_LABELS[phase]} <span style="font-size:11px;color:var(--t3);font-weight:400">(${conResultado}/${total} con resultado)</span></h3>
+        <span class="admin-sec-arrow" id="adminarrow-${secId}">▼</span>
       </div>
-      <div class="row">
-        <input type="number" min="0" max="20" class="si" id="ko-${k}-gl" value="${rm.gl??''}" placeholder="?">
-        <span class="score-dash">-</span>
-        <input type="number" min="0" max="20" class="si" id="ko-${k}-gv" value="${rm.gv??''}" placeholder="?">
-        <input type="text" id="ko-${k}-pen" value="${esc(rm.pen||'')}" placeholder="Pen? ej: España" style="flex:1">
-        <input type="text" id="ko-${k}-gan" value="${esc(rm.ganador||'')}" placeholder="Ganador real" style="flex:1">
+      <div class="admin-sec-body" id="adminsec-${secId}" style="padding:10px">
+        ${matchesHtml}
       </div>
     </div>`;
   }).join('');
