@@ -560,7 +560,7 @@ window.addEventListener('load', function(){
    'guardarValidacion','guardarGrupos','guardarKO','guardarBote',
    'crearReto','toggleReto','deleteReto','guardarGanadoresReto',
    'agregarPenalizacion','quitarPenalizacion','cerrarRegistro','cerrarPronos',
-   'exportarDatos','resetPw','eliminarJugador','renderPronosticos'
+   'exportarDatos','resetPw','eliminarJugador','renderPronosticos','validarTipoKO'
   ].forEach(fn => {
     window[fn] = function(...args) {
       if(_ready[fn]) return _ready[fn](...args);
@@ -804,7 +804,7 @@ const AVATARS = {
 const PTS_DEFAULT = {
   g1:10, g2:10, g3:10, g4:10, terceros:8,
   exacto_grupos:20, quiniela:10,
-  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
+  exacto_ko:20, exacto_ko_pen:10, pasa_ronda:5,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:100, bracket_subcampeon:50,
   bracket_tercero:60, bracket_cuarto:40,
@@ -999,7 +999,7 @@ window.normalizarPuntosRetos=function(){
 
 window.aplicarNuevosPuntos=function(){
   if(!confirm('¿Aplicar los nuevos valores de puntos? Esto afecta a TODOS los jugadores retroactivamente.')) return;
-  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10,exacto_ko:20,exacto_ko_pen:10,pasa_ronda:5};
   // Rellenar inputs del panel
   Object.entries(nuevos).forEach(function(e){
     var el=document.getElementById('ar-pts_'+e[0])||document.getElementById('ar-'+e[0]);
@@ -1021,7 +1021,7 @@ window.aplicarNuevosPuntos=function(){
 window.migrarPuntosNuevos=function(){
   const pts=resultados.pts||{};
   const viejosExactos={g1:10,g2:5,terceros:2,exacto_grupos:10,quiniela:4};
-  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10,exacto_ko:20,exacto_ko_pen:10,pasa_ronda:5};
   let needsUpdate=false;
   const update=Object.assign({},pts);
   Object.entries(viejosExactos).forEach(function(e){
@@ -1409,13 +1409,14 @@ function _calcPointsRaw(player){
 
       const pmGl=Number(pm.gl), pmGv=Number(pm.gv);
       const rmGl=Number(rm.gl), rmGv=Number(rm.gv);
-      const rmPen=rm.pen||''; // who won on penalties (real)
-      const pmPen=pm.pen||''; // player's penalty winner prediction
       const rmGanador=rm.ganador||'';
+      // tipo: '90' | 'prorroga' | 'penaltis' — sustituye al viejo campo de texto "pen"
+      const rmTipo=rm.tipo||(rm.pen?'penaltis':''); // compat con datos antiguos guardados con rm.pen
+      const pmTipo=pm.tipo||(pm.pen?'penaltis':'');
 
       const exactoMarcador=(pmGl===rmGl && pmGv===rmGv);
-      const hayPenaltisReal=!!rmPen; // real match went to penalties
-      const hayPenaltisProno=!!pmPen; // player predicted penalties
+      const hayPenaltisReal=rmTipo==='penaltis';
+      const hayPenaltisProno=pmTipo==='penaltis';
 
       let pts=0, label='', cat='elim';
 
@@ -1432,18 +1433,19 @@ function _calcPointsRaw(player){
           label='Pasa '+k+': '+pm.pasa;
         }
       } else {
-        // Real match went to penalties (score in 90+extra was a draw)
-        if(hayPenaltisProno && cmp(pmPen,rmPen)){
-          // Player predicted penalties AND correct winner → +14
+        // Real match went to penalties (score in 90+extra was a draw).
+        // El ganador de penaltis ahora se compara via el campo "pasa", no via texto libre.
+        if(hayPenaltisProno && exactoMarcador && rmGanador && cmp(pm.pasa,rmGanador)){
+          // Player predicted penalties, exact draw score AND correct winner → +14
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto penaltis '+k+': '+pmPen;
+          label='Exacto penaltis '+k+': '+pm.pasa;
           cat='exactos';
-        } else if(hayPenaltisProno && !cmp(pmPen,rmPen)){
-          // Player predicted penalties but wrong winner → +5
+        } else if(hayPenaltisProno && exactoMarcador && rmGanador && !cmp(pm.pasa,rmGanador)){
+          // Player predicted penalties, exact draw score but wrong winner → +5
           pts=getPts('exacto_ko_pen');
           label='Penaltis (ganador fallado) '+k;
         } else if(exactoMarcador){
-          // Player got the 90min/extra score right but didn't predict penalties
+          // Player got the 90min/extra score right but didn't mark "penaltis"
           // Counts as exact score but no penalty bonus → +14 (still got it right)
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
           label='Exacto prórroga '+k+': '+pmGl+'-'+pmGv;
@@ -1940,6 +1942,28 @@ window.verJugador=function(name){
 };
 
 
+window.validarTipoKO=function(selectEl){
+  // Comprueba coherencia: 90min/Prórroga requieren marcador con ganador (no empate).
+  // Penaltis requiere marcador en empate (solo se llega a penaltis si empataron).
+  const id=selectEl.id; // pm-KO_xxx-tipo
+  const base=id.replace(/-tipo$/,'');
+  const tipo=selectEl.value;
+  if(!tipo) return;
+  const glEl=document.getElementById(base+'-gl');
+  const gvEl=document.getElementById(base+'-gv');
+  const gl=glEl&&glEl.value!==''?Number(glEl.value):null;
+  const gv=gvEl&&gvEl.value!==''?Number(gvEl.value):null;
+  if(gl==null||gv==null){ return; } // sin marcador aún, no se puede validar
+  const esEmpate=gl===gv;
+  if((tipo==='90'||tipo==='prorroga')&&esEmpate){
+    alert('⚠️ Si el resultado es '+(tipo==='90'?'en 90 minutos':'en prórroga')+', no puede ser empate. Corrige el marcador o selecciona "Penaltis".');
+    selectEl.value='';
+  } else if(tipo==='penaltis'&&!esEmpate){
+    alert('⚠️ Para que haya penaltis, el marcador debe ser un empate (solo se llega a penaltis si empataron en 90min+prórroga). Corrige el marcador.');
+    selectEl.value='';
+  }
+};
+
 window.guardarPronosticos=async function(){
   if(!currentUser) return;
   const p={...pronosticos[currentUser]||{}};
@@ -1969,13 +1993,13 @@ window.guardarPronosticos=async function(){
     const k='KO_'+m.id;
     const gl=document.getElementById('pm-'+k+'-gl');
     const gv=document.getElementById('pm-'+k+'-gv');
-    const pen=document.getElementById('pm-'+k+'-pen');
+    const tipo=document.getElementById('pm-'+k+'-tipo');
     const pasa=document.getElementById('pm-'+k+'-pasa');
     if((gl&&gl.value!=='')||(pasa&&pasa.value)){
       if(!p.partidos[k]) p.partidos[k]={};
       if(gl&&gl.value!=='') p.partidos[k].gl=Number(gl.value);
       if(gv&&gv.value!=='') p.partidos[k].gv=Number(gv.value);
-      if(pen&&pen.value) p.partidos[k].pen=pen.value.trim();
+      if(tipo&&tipo.value) p.partidos[k].tipo=tipo.value;
       if(pasa&&pasa.value) p.partidos[k].pasa=pasa.value;
     }
   });
@@ -2100,6 +2124,10 @@ function renderPronosticos(){
         const exacto=rm&&pm.gl!=null&&Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
         const hitPasa=rm&&cmp(pm.pasa,rm.ganador);
         const localTeams=kn.local&&kn.visit?[kn.local,kn.visit]:ALL_TEAMS;
+        const tipoVal=pm.tipo||'';
+        function tipoOpt(val,label){ return '<option value="'+val+'" '+(tipoVal===val?'selected':'')+'>'+label+'</option>'; }
+        const tipoSelectHtml='<select class="fi" id="pm-'+k+'-tipo" '+(readOnlyFase?'disabled':'')+' onchange="validarTipoKO(this)" style="width:110px;font-size:11px">'
+          +'<option value="">¿Cómo?</option>'+tipoOpt('90','90 min')+tipoOpt('prorroga','Prórroga')+tipoOpt('penaltis','Penaltis')+'</select>';
         return `<div class="match-row" style="flex-direction:column;gap:6px;padding:8px 0">
           <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
             <span class="match-label" style="font-size:11px">${localL} vs ${visitL}</span>
@@ -2107,7 +2135,7 @@ function renderPronosticos(){
               <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}" ${readOnlyFase?'readonly':''}>
               <span class="score-dash">-</span>
               <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}" ${readOnlyFase?'readonly':''}>
-              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" ${readOnlyFase?'readonly':''} placeholder="Pen? ej: España" style="width:90px;font-size:11px">
+              ${tipoSelectHtml}
               ${rm?`<span class="badge ${exacto?'badge-ok':'badge-no'}" style="font-size:9px">${exacto?'✓exacto':'Real:'+rm.gl+'-'+rm.gv}</span>`:''}
             </div>
           </div>
@@ -3958,7 +3986,12 @@ function renderAdmin(){
           <input type="number" min="0" max="20" class="si" id="ko-${k}-gl" value="${rm.gl??''}" placeholder="?">
           <span class="score-dash">-</span>
           <input type="number" min="0" max="20" class="si" id="ko-${k}-gv" value="${rm.gv??''}" placeholder="?">
-          <input type="text" id="ko-${k}-pen" value="${esc(rm.pen||'')}" placeholder="Pen? ej: España" style="flex:1">
+          <select id="ko-${k}-tipo" onchange="validarTipoKO(this)" style="width:100px;font-size:11px">
+            <option value="">¿Cómo?</option>
+            <option value="90" ${(rm.tipo||(rm.pen?'penaltis':''))==='90'?'selected':''}>90 min</option>
+            <option value="prorroga" ${(rm.tipo||(rm.pen?'penaltis':''))==='prorroga'?'selected':''}>Prórroga</option>
+            <option value="penaltis" ${(rm.tipo||(rm.pen?'penaltis':''))==='penaltis'?'selected':''}>Penaltis</option>
+          </select>
           ${koTeamSelect('ko-'+k+'-gan', rm.ganador, candsPartido.length?candsPartido:cands)}
         </div>
       </div>`;
@@ -4415,7 +4448,7 @@ function renderAdmin(){
       </div>
       <div style="margin-top:10px;padding:10px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;margin-bottom:8px">
         <div style="font-size:11px;color:#4ade80;font-weight:700;margin-bottom:6px">✨ Nuevos valores (junio 2026)</div>
-        <div style="font-size:11px;color:var(--t2);margin-bottom:8px">Exacto +20 · Quiniela +10 · 1º grupo +20 · 2º grupo +15 · Terceros +8</div>
+        <div style="font-size:11px;color:var(--t2);margin-bottom:8px">Exacto +20 · Quiniela +10 · 1º grupo +20 · 2º grupo +15 · Terceros +8 · KO exacto +25 · KO penaltis fallado +10 · KO solo pasa +5</div>
         <button class="btn btn-sm" onclick="aplicarNuevosPuntos()" style="background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer">⚡ Aplicar con carácter retroactivo</button>
       </div>
       <button class="btn btn-p btn-sm" onclick="guardarPuntos()">Guardar puntos</button>
@@ -4806,21 +4839,33 @@ window.guardarKO=async function(){
   const p=JSON.parse(JSON.stringify(partidos));
   const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
+  let errorValidacion=null;
   getAllBracket().forEach(m=>{
     const k=m.id;
     const local=document.getElementById('ko-'+k+'-local')?.value.trim();
     const visit=document.getElementById('ko-'+k+'-visit')?.value.trim();
     const gl=document.getElementById('ko-'+k+'-gl');
     const gv=document.getElementById('ko-'+k+'-gv');
-    const pen=document.getElementById('ko-'+k+'-pen')?.value.trim();
+    const tipo=document.getElementById('ko-'+k+'-tipo')?.value;
     const gan=document.getElementById('ko-'+k+'-gan')?.value.trim();
     if(local||visit) res.koNames[k]={local:local||'',visit:visit||''};
     if(gl&&gl.value!==''&&gv&&gv.value!==''){
-      p['KO_'+k]={gl:Number(gl.value),gv:Number(gv.value)};
-      if(pen) p['KO_'+k].pen=pen;
+      const glNum=Number(gl.value), gvNum=Number(gv.value);
+      const esEmpate=glNum===gvNum;
+      if(tipo&&((tipo==='90'||tipo==='prorroga')&&esEmpate)){
+        errorValidacion=m.id+': si es 90min/prórroga no puede ser empate';
+      } else if(tipo==='penaltis'&&!esEmpate){
+        errorValidacion=m.id+': si es penaltis, el marcador debe ser empate';
+      }
+      p['KO_'+k]={gl:glNum,gv:gvNum};
+      if(tipo) p['KO_'+k].tipo=tipo;
       if(gan) p['KO_'+k].ganador=gan;
     }
   });
+  if(errorValidacion){
+    alert('⚠️ Error de coherencia en '+errorValidacion+'. Corrige antes de guardar.');
+    return;
+  }
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
   // Actualizar variables globales en memoria AHORA, sin esperar al onSnapshot
@@ -6352,7 +6397,7 @@ const AVATARS = {
 const PTS_DEFAULT = {
   g1:10, g2:10, g3:10, g4:10, terceros:8,
   exacto_grupos:20, quiniela:10,
-  exacto_ko:10, exacto_ko_pen:5, pasa_ronda:4,
+  exacto_ko:20, exacto_ko_pen:10, pasa_ronda:5,
   bracket_cruce:15, bracket_pasa:10,
   bracket_final_cruce:50, bracket_final_gana:100, bracket_subcampeon:50,
   bracket_tercero:60, bracket_cuarto:40,
@@ -6527,7 +6572,7 @@ function getPts(k){ return (resultados.pts&&resultados.pts[k]!=null)?resultados.
 window.migrarPuntosNuevos=function(){
   const pts=resultados.pts||{};
   const viejosExactos={g1:10,g2:5,terceros:2,exacto_grupos:10,quiniela:4};
-  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10};
+  const nuevos={g1:20,g2:15,terceros:8,exacto_grupos:20,quiniela:10,exacto_ko:20,exacto_ko_pen:10,pasa_ronda:5};
   let needsUpdate=false;
   const update=Object.assign({},pts);
   Object.entries(viejosExactos).forEach(function(e){
@@ -6891,6 +6936,7 @@ function _calcPointsRaw(player){
   });
 
   // KO exactos + quién pasa (ronda a ronda pronos)
+  // tipo: '90' | 'prorroga' | 'penaltis' — sustituye al viejo campo de texto "pen"
   const koPhases=['R32','R16','QF','SF','3RD','FINAL'];
   koPhases.forEach(phase=>{
     const phaseMatches=getAllBracket().filter(m=>m.phase===phase);
@@ -6899,10 +6945,22 @@ function _calcPointsRaw(player){
       const pm=p.partidos?.[k];
       const rm=partidos[k];
       if(!pm||!rm||rm.gl==null) return;
-      // Exact score
-      if(Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv)){
-        if(pm.pen&&rm.pen&&cmp(pm.pen,rm.pen)) add('exactos','Exacto KO '+m.id+': '+pm.gl+'-'+pm.gv+'('+pm.pen+')',getPts('exacto_ko'));
-        else if(Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv)) add('exactos','Marcador KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko_pen'));
+      const rmTipo=rm.tipo||(rm.pen?'penaltis':'');
+      const pmTipo=pm.tipo||(pm.pen?'penaltis':'');
+      const exactoMarcador=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
+      if(exactoMarcador){
+        if(rmTipo==='penaltis'){
+          // El ganador de penaltis se compara via "quién pasa", no via texto libre
+          if(pmTipo==='penaltis'&&pm.pasa&&rm.ganador&&cmp(pm.pasa,rm.ganador)){
+            add('exactos','Exacto penaltis '+m.id+': '+pm.pasa,getPts('exacto_ko'));
+          } else if(pmTipo==='penaltis'){
+            add('exactos','Penaltis (ganador fallado) '+m.id,getPts('exacto_ko_pen'));
+          } else {
+            add('exactos','Marcador KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko_pen'));
+          }
+        } else {
+          add('exactos','Exacto KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko'));
+        }
       }
       // Quién pasa
       if(pm.pasa&&rm.ganador&&cmp(pm.pasa,rm.ganador)) add('elim','Pasa '+m.id+': '+pm.pasa,getPts('pasa_ronda'));
@@ -7312,6 +7370,28 @@ window.verJugador=function(name){
 };
 
 
+window.validarTipoKO=function(selectEl){
+  // Comprueba coherencia: 90min/Prórroga requieren marcador con ganador (no empate).
+  // Penaltis requiere marcador en empate (solo se llega a penaltis si empataron).
+  const id=selectEl.id; // pm-KO_xxx-tipo
+  const base=id.replace(/-tipo$/,'');
+  const tipo=selectEl.value;
+  if(!tipo) return;
+  const glEl=document.getElementById(base+'-gl');
+  const gvEl=document.getElementById(base+'-gv');
+  const gl=glEl&&glEl.value!==''?Number(glEl.value):null;
+  const gv=gvEl&&gvEl.value!==''?Number(gvEl.value):null;
+  if(gl==null||gv==null){ return; } // sin marcador aún, no se puede validar
+  const esEmpate=gl===gv;
+  if((tipo==='90'||tipo==='prorroga')&&esEmpate){
+    alert('⚠️ Si el resultado es '+(tipo==='90'?'en 90 minutos':'en prórroga')+', no puede ser empate. Corrige el marcador o selecciona "Penaltis".');
+    selectEl.value='';
+  } else if(tipo==='penaltis'&&!esEmpate){
+    alert('⚠️ Para que haya penaltis, el marcador debe ser un empate (solo se llega a penaltis si empataron en 90min+prórroga). Corrige el marcador.');
+    selectEl.value='';
+  }
+};
+
 window.guardarPronosticos=async function(){
   if(!currentUser) return;
   const p={...pronosticos[currentUser]||{}};
@@ -7341,13 +7421,13 @@ window.guardarPronosticos=async function(){
     const k='KO_'+m.id;
     const gl=document.getElementById('pm-'+k+'-gl');
     const gv=document.getElementById('pm-'+k+'-gv');
-    const pen=document.getElementById('pm-'+k+'-pen');
+    const tipo=document.getElementById('pm-'+k+'-tipo');
     const pasa=document.getElementById('pm-'+k+'-pasa');
     if((gl&&gl.value!=='')||(pasa&&pasa.value)){
       if(!p.partidos[k]) p.partidos[k]={};
       if(gl&&gl.value!=='') p.partidos[k].gl=Number(gl.value);
       if(gv&&gv.value!=='') p.partidos[k].gv=Number(gv.value);
-      if(pen&&pen.value) p.partidos[k].pen=pen.value.trim();
+      if(tipo&&tipo.value) p.partidos[k].tipo=tipo.value;
       if(pasa&&pasa.value) p.partidos[k].pasa=pasa.value;
     }
   });
@@ -7757,21 +7837,33 @@ window.guardarKO=async function(){
   const p=JSON.parse(JSON.stringify(partidos));
   const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
+  let errorValidacion=null;
   getAllBracket().forEach(m=>{
     const k=m.id;
     const local=document.getElementById('ko-'+k+'-local')?.value.trim();
     const visit=document.getElementById('ko-'+k+'-visit')?.value.trim();
     const gl=document.getElementById('ko-'+k+'-gl');
     const gv=document.getElementById('ko-'+k+'-gv');
-    const pen=document.getElementById('ko-'+k+'-pen')?.value.trim();
+    const tipo=document.getElementById('ko-'+k+'-tipo')?.value;
     const gan=document.getElementById('ko-'+k+'-gan')?.value.trim();
     if(local||visit) res.koNames[k]={local:local||'',visit:visit||''};
     if(gl&&gl.value!==''&&gv&&gv.value!==''){
-      p['KO_'+k]={gl:Number(gl.value),gv:Number(gv.value)};
-      if(pen) p['KO_'+k].pen=pen;
+      const glNum=Number(gl.value), gvNum=Number(gv.value);
+      const esEmpate=glNum===gvNum;
+      if(tipo&&((tipo==='90'||tipo==='prorroga')&&esEmpate)){
+        errorValidacion=m.id+': si es 90min/prórroga no puede ser empate';
+      } else if(tipo==='penaltis'&&!esEmpate){
+        errorValidacion=m.id+': si es penaltis, el marcador debe ser empate';
+      }
+      p['KO_'+k]={gl:glNum,gv:gvNum};
+      if(tipo) p['KO_'+k].tipo=tipo;
       if(gan) p['KO_'+k].ganador=gan;
     }
   });
+  if(errorValidacion){
+    alert('⚠️ Error de coherencia en '+errorValidacion+'. Corrige antes de guardar.');
+    return;
+  }
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
   // Actualizar variables globales en memoria AHORA, sin esperar al onSnapshot
