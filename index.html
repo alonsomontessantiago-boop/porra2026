@@ -2299,9 +2299,18 @@ function renderBracket(){
     if(!team) return `<div class="bracket-team"><span style="color:var(--t3);font-size:10px">pendiente</span></div>`;
     const isPick=myPick&&cmp(myPick,team);
     const isReal=realWinner&&cmp(realWinner,team);
-    return `<div class="bracket-team ${isPick?'winner':''} ${isReal?'real-winner':''}">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85px;font-size:11px${isPick?';font-weight:700;color:var(--gold)':''}">${team}</span>
-      ${isPick&&isReal?'<span style="color:#4ade80;font-size:9px;flex-shrink:0">✓</span>':''}
+    // Fondo de celda completo según acierto/fallo, igual que en el Comparador.
+    let bg='', txtColor='var(--t2)', icon='', fontWeight='';
+    if(realWinner){
+      if(isPick&&isReal){ bg='background:rgba(74,222,128,.18);'; txtColor='#4ade80'; icon=' ✓'; fontWeight='font-weight:700;'; }
+      else if(isPick&&!isReal){ bg='background:rgba(248,113,113,.14);'; txtColor='#f87171'; icon=' ✗'; fontWeight='font-weight:700;'; }
+      else if(isReal&&!isPick){ bg='background:rgba(74,222,128,.08);'; txtColor='#4ade80'; }
+    } else if(isPick){
+      txtColor='var(--gold)'; fontWeight='font-weight:700;';
+    }
+    return `<div class="bracket-team" style="${bg}border-radius:4px;padding:2px 4px;margin:1px 0">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85px;font-size:11px;${fontWeight}color:${txtColor}">${team}</span>
+      ${icon?`<span style="font-size:9px;flex-shrink:0;color:${txtColor}">${icon}</span>`:''}
     </div>`;
   }
 
@@ -2338,7 +2347,13 @@ function renderBracket(){
     }
     const isR32=phase==='R32';
     const canPick=!locked&&(t1||t2); // R32 also pickable
-    return `<div class="bracket-match${canPick?' clickable':''}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
+    // Borde de toda la card según el estado global del partido (acierto/fallo/pendiente)
+    const myPickGano=myPick&&realWinner&&cmp(myPick,realWinner);
+    const myPickFallo=myPick&&realWinner&&!cmp(myPick,realWinner);
+    let borderStyle='border:1px solid var(--brd);';
+    if(crucePropioOk&&myPickGano) borderStyle='border:1.5px solid rgba(74,222,128,.5);';
+    else if(crucePropioOk&&myPickFallo) borderStyle='border:1.5px solid rgba(248,113,113,.4);';
+    return `<div class="bracket-match${canPick?' clickable':''}" style="${borderStyle}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
       ${teamBox(t1,myPick,realWinner)}
       <div style="font-size:8px;color:var(--t3);padding:1px 4px;display:flex;justify-content:space-between;align-items:center">
         <span>vs</span>
@@ -2346,7 +2361,7 @@ function renderBracket(){
           :'<span style="font-size:9px;color:var(--t3)">elige→</span>'}
       </div>
       ${teamBox(t2,myPick,realWinner)}
-      ${(crucePropioOk&&realWinner)?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`
+      ${(crucePropioOk&&realWinner)?`<div style="font-size:8px;color:${myPickGano?'#4ade80':myPickFallo?'#f87171':'var(--t3)'};padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPickGano?' ✓':myPickFallo?' ✗':''}</div>`
         :(!crucePropioOk&&realWinner&&phase!=='R32'&&t1&&t2)?`<div style="font-size:8px;color:var(--t3);padding:1px 4px;border-top:1px solid var(--brd2)">Cruce aún no ocurrido</div>`:''}
     </div>`;
   }
