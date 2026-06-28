@@ -2207,11 +2207,24 @@ function renderPronosticos(){
 
   const tabContent=pronoTab==='grupos'?grupTabContent:pronoTab==='elim'?elimTabContent:clasifTabContent;
 
+  // El botón de guardar depende de si la PESTAÑA ACTUAL permite editar, no del
+  // bloqueo global de grupos. Antes, si grupos estaba cerrado, el botón
+  // desaparecía también en Eliminatorias aunque esa fase estuviera abierta.
+  const puedeGuardarTab=
+    pronoTab==='grupos'?!locked:
+    pronoTab==='elim'?hayFaseElimAbierta:
+    !locked; // clasificación sigue atada al bloqueo de grupos (predicción fija pre-Mundial)
+
+  const bannerTab=
+    pronoTab==='grupos'&&locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':
+    pronoTab==='elim'&&!hayFaseElimAbierta?'<div class="banner banner-gold">🔒 No hay ninguna ronda eliminatoria abierta ahora mismo</div>':
+    pronoTab==='clasif'&&locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':'';
+
   document.getElementById('prono-content').innerHTML=`
-    ${locked?'<div class="banner banner-gold">🔒 Fase de grupos cerrada — solo lectura</div>':''}
+    ${bannerTab}
     ${pronoTabsHtml}
     ${tabContent}
-    ${!locked?`<div style="padding-bottom:20px">
+    ${puedeGuardarTab?`<div style="padding-bottom:20px">
       <button class="btn btn-p btn-w" onclick="guardarPronosticos()">💾 Guardar mis pronósticos</button>
       <div id="save-ok" class="saved-ok">✅ Guardado</div>
     </div>`:''}`;
