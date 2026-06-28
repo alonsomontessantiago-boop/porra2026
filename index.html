@@ -5635,11 +5635,18 @@ function renderComparador(){
             if(!faseVisible) return `<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">🔒</td>`;
             const pm=(pronosticos[n]||{}).partidos?.[k];
             if(!pm||pm.gl==null) return `<td style="color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">—</td>`;
-            const exacto=rm&&Number(pm.gl)===Number(realGl)&&Number(pm.gv)===Number(realGv);
+            const marcadorOk=rm&&Number(pm.gl)===Number(realGl)&&Number(pm.gv)===Number(realGv);
+            const rmTipoCmp=rm?.tipo||(rm?.pen?'penaltis':'');
+            const pmTipoCmp=pm.tipo||(pm.pen?'penaltis':'');
+            const tipoOk=pmTipoCmp&&rmTipoCmp&&pmTipoCmp===rmTipoCmp;
             const hitPasa=rm?.ganador&&cmp(pm.pasa,rm.ganador);
-            const fallo=rm&&!exacto&&!hitPasa;
-            const bg=exacto?'rgba(45,166,83,.25)':hitPasa?'rgba(232,168,32,.2)':fallo?'rgba(232,50,50,.15)':'';
-            const color=exacto?'#4ade80':hitPasa?'var(--gold)':fallo?'#f87171':'var(--t1)';
+            // Exacto completo (+25): marcador Y tipo coinciden. Parcial (+10): marcador
+            // ok pero falla tipo, o tipo ok pero falla marcador con ganador correcto.
+            const exacto=marcadorOk&&tipoOk;
+            const parcial=rm&&!exacto&&((marcadorOk&&!tipoOk)||(hitPasa&&!marcadorOk));
+            const fallo=rm&&!exacto&&!parcial&&!hitPasa;
+            const bg=exacto?'rgba(45,166,83,.25)':parcial?'rgba(232,168,32,.18)':hitPasa?'rgba(232,168,32,.2)':fallo?'rgba(232,50,50,.15)':'';
+            const color=exacto?'#4ade80':parcial?'var(--gold)':hitPasa?'var(--gold)':fallo?'#f87171':'var(--t1)';
             const tipoLabel=pm.tipo==='penaltis'?' (pen)':pm.tipo==='prorroga'?' (pr)':'';
             const pasaLabel=pm.pasa?(pm.tipo==='penaltis'?' →'+pm.pasa+' (pen)':' →'+pm.pasa):'';
             const texto=pm.gl+'-'+pm.gv+tipoLabel+pasaLabel;
