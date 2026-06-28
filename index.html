@@ -2051,8 +2051,9 @@ function renderPronosticos(){
       ${teamSelect('pf-'+key,p[key],ALL_TEAMS,'Equipo...',locked)}</div>`;
   }).join('');
 
-  const koHtml=locked?'<div class="note">Pronósticos de eliminatorias bloqueados hasta que el admin abra cada ronda.</div>':
-  ['R32','R16','QF','SF','3RD','FINAL'].map(phase=>{
+  // IMPORTANTE: las eliminatorias son independientes del bloqueo de grupos (locked).
+  // Cada fase (R32/R16/...) tiene su propio toggle de abierta/cerrada en admin.
+  const koHtml=['R32','R16','QF','SF','3RD','FINAL'].map(phase=>{
     const fk='fase_'+phase+'_abierta';
     const abierta=res[fk];
     const phaseLabel={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis',FINAL:'Final','3RD':'3er Puesto'}[phase];
@@ -2083,16 +2084,16 @@ function renderPronosticos(){
           <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
             <span class="match-label" style="font-size:11px">${localL} vs ${visitL}</span>
             <div class="score-pair">
-              <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}" ${locked?'readonly':''}>
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}">
               <span class="score-dash">-</span>
-              <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}" ${locked?'readonly':''}>
-              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" ${locked?'readonly':''} placeholder="Pen? ej: España" style="width:90px;font-size:11px">
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}">
+              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" placeholder="Pen? ej: España" style="width:90px;font-size:11px">
               ${rm?`<span class="badge ${exacto?'badge-ok':'badge-no'}" style="font-size:9px">${exacto?'✓exacto':'Real:'+rm.gl+'-'+rm.gv}</span>`:''}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;width:100%">
             <label style="font-size:11px;color:var(--t2);white-space:nowrap">Quién pasa (+${getPts('pasa_ronda')}):</label>
-            ${teamSelect('pm-'+k+'-pasa',pm.pasa,localTeams,'Equipo...',locked)}
+            ${teamSelect('pm-'+k+'-pasa',pm.pasa,localTeams,'Equipo...',false)}
             ${rm?.ganador?`<span class="badge ${hitPasa?'badge-ok':'badge-no'}" style="font-size:9px">${hitPasa?'✓':'era '+rm.ganador}</span>`:''}
           </div>
         </div>`;
