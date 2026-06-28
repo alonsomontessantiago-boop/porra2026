@@ -733,23 +733,27 @@ for(const [g, teams] of Object.entries(GRUPOS)){
 // Official FIFA bracket for Round of 32
 // M73-M88: Round of 32 (dieciseisavos)
 // Structure: {id, slot, desc} where desc shows the official matchup
+// Cruces oficiales confirmados por FIFA y verificados con cuadro oficial 433
+// (jun 2026) + ElDesmarque (fechas/horas). Equipos reales donde la fase de
+// grupos ya está resuelta; fórmula de grupo donde depende de la matriz de
+// 8 mejores terceros (495 combinaciones posibles).
 const BRACKET_R32 = [
-  {id:"M73", desc:"2ºA vs 2ºB",  date:"2026-06-28", venue:"Los Angeles"},
-  {id:"M74", desc:"1ºE vs 3er",  date:"2026-06-29", venue:"Boston"},
-  {id:"M75", desc:"1ºF vs 2ºC",  date:"2026-06-29", venue:"Monterrey"},
-  {id:"M76", desc:"1ºC vs 2ºF",  date:"2026-06-29", venue:"Houston"},
-  {id:"M77", desc:"1ºI vs 3er",  date:"2026-06-30", venue:"Nueva York"},
-  {id:"M78", desc:"2ºE vs 2ºI",  date:"2026-06-30", venue:"Dallas"},
-  {id:"M79", desc:"1ºA vs 3er",  date:"2026-06-30", venue:"Azteca"},
-  {id:"M80", desc:"1ºL vs 3er",  date:"2026-07-01", venue:"Atlanta"},
-  {id:"M81", desc:"1ºD vs 3er",  date:"2026-07-01", venue:"San Francisco"},
-  {id:"M82", desc:"1ºG vs 3er",  date:"2026-07-01", venue:"Seattle"},
-  {id:"M83", desc:"2ºK vs 2ºL",  date:"2026-07-02", venue:"Toronto"},
-  {id:"M84", desc:"1ºH vs 2ºJ",  date:"2026-07-02", venue:"Los Angeles"},
-  {id:"M85", desc:"1ºB vs 3er",  date:"2026-07-02", venue:"Vancouver"},
-  {id:"M86", desc:"1ºJ vs 2ºH",  date:"2026-07-03", venue:"Miami"},
-  {id:"M87", desc:"1ºK vs 3er",  date:"2026-07-03", venue:"Kansas City"},
-  {id:"M88", desc:"2ºD vs 2ºG",  date:"2026-07-03", venue:"Dallas"},
+  {id:"M73", desc:"Sudáfrica vs Canadá",        date:"2026-06-28", venue:"Los Angeles"},
+  {id:"M76", desc:"Brasil vs Japón",            date:"2026-06-29", venue:"Houston"},
+  {id:"M74", desc:"Alemania vs Paraguay",       date:"2026-06-29", venue:"Boston"},
+  {id:"M75", desc:"Países Bajos vs Marruecos",  date:"2026-06-29", venue:"Monterrey"},
+  {id:"M78", desc:"Costa de Marfil vs Noruega", date:"2026-06-30", venue:"Dallas"},
+  {id:"M77", desc:"Francia vs Suecia",          date:"2026-06-30", venue:"Nueva York"},
+  {id:"M79", desc:"México vs Ecuador",          date:"2026-07-01", venue:"Azteca"},
+  {id:"M80", desc:"Inglaterra vs R.D. del Congo", date:"2026-07-01", venue:"Atlanta"},
+  {id:"M82", desc:"Bélgica vs Senegal",         date:"2026-07-01", venue:"Seattle"},
+  {id:"M81", desc:"Estados Unidos vs Bosnia Herzegovina", date:"2026-07-01", venue:"San Francisco"},
+  {id:"M84", desc:"España vs Austria",          date:"2026-07-02", venue:"Los Angeles"},
+  {id:"M83", desc:"Colombia vs Ghana",          date:"2026-07-02", venue:"Toronto"},
+  {id:"M85", desc:"Suiza vs Argelia",           date:"2026-07-03", venue:"Vancouver"},
+  {id:"M88", desc:"Australia vs Egipto",        date:"2026-07-03", venue:"Dallas"},
+  {id:"M86", desc:"Argentina vs Cabo Verde",    date:"2026-07-03", venue:"Miami"},
+  {id:"M87", desc:"Portugal vs Croacia",        date:"2026-07-03", venue:"Kansas City"},
 ];
 
 // Octavos: winners of R32 pairs
@@ -1455,6 +1459,23 @@ function _calcPointsRaw(player){
 ;
 
   // Bracket (pre-Mundial) - cruce + quién pasa
+  // IMPORTANTE: el cruce se busca por EQUIPOS dentro de toda la ronda, no por
+  // ID de casilla fijo. Si España-Croacia ocurre en la realidad en cualquier
+  // partido de octavos, y el jugador puso ese cruce en CUALQUIER casilla de
+  // octavos de su bracket (en cualquier orden), puntúa igual.
+  let _r32tCache=null; // Evitar recalcular resolveR32Teams en cada llamada del loop de rondas
+  const RONDAS_BRACKET={
+    R32: BRACKET_R32.map(m=>m.id),
+    R16: BRACKET_R16.map(m=>m.id),
+    QF: BRACKET_QF.map(m=>m.id),
+    SF: BRACKET_SF.map(m=>m.id),
+  };
+  function getRondaDe(matchId){
+    for(const [ronda,ids] of Object.entries(RONDAS_BRACKET)){
+      if(ids.includes(matchId)) return ronda;
+    }
+    return null;
+  }
   if(p.bracket){
     ALL_BRACKET.forEach(m=>{
       const myPick=p.bracket[m.id];
@@ -1464,16 +1485,15 @@ function _calcPointsRaw(player){
       const isFinal=m.id==='M104';
       const is3rd=m.id==='M103';
 
-      // Acertar el cruce: los dos equipos de ese partido coinciden con los del jugador
       const [myT1,myT2]=getTeamsForBracket(p,m.id);
-      const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
-        ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
 
       if(isFinal||is3rd){
+        // Final y 3er puesto siguen comparando casilla exacta (solo hay una)
+        const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
+          ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
         if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
         if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
         if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
-        // Subcampeón (perdedor final) / 4º puesto (perdedor partido 3er puesto)
         if(myPick&&myT1&&myT2){
           const myLoser=cmp(myPick,myT1)?myT2:myT1;
           const realLoser=realWinner&&realLocal&&realVisit?(cmp(realWinner,realLocal)?realVisit:realLocal):null;
@@ -1481,15 +1501,32 @@ function _calcPointsRaw(player){
           if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','4º puesto: '+myLoser,getPts('bracket_cuarto'));
         }
       } else {
-        if(cruce_ok) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
-        if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Pasa '+m.id+': '+myPick,getPts('bracket_pasa'));
+        // R32/R16/QF/SF: buscar el cruce real en CUALQUIER casilla de la misma ronda del bracket del jugador
+        const ronda=getRondaDe(m.id);
+        const idsRonda=ronda?RONDAS_BRACKET[ronda]:[m.id];
+        let crucePropio=false, pasaPropio=false;
+        if(realLocal&&realVisit){
+          for(const otroId of idsRonda){
+            const [t1,t2]=getTeamsForBracket(p,otroId);
+            if(t1&&t2&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
+              crucePropio=true;
+              const pickOtro=p.bracket[otroId];
+              if(pickOtro&&realWinner&&cmp(pickOtro,realWinner)) pasaPropio=true;
+              break; // un cruce real solo puede coincidir con una casilla del jugador
+            }
+          }
+        }
+        if(crucePropio) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
+        if(pasaPropio) add('bracket_pts','Pasa '+m.id+': '+realWinner,getPts('bracket_pasa'));
       }
     });
   }
 
   function getTeamsForBracket(pp,matchId){
-    const r32t=resolveR32Teams(currentUser||Object.keys(players)[0]);
-    if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
+    // FIX: usar el jugador correcto (player) en vez de currentUser — antes
+    // calculaba siempre el bracket del usuario logueado, no del jugador evaluado.
+    if(!_r32tCache) _r32tCache=resolveR32Teams(player);
+    if(BRACKET_R32.some(x=>x.id===matchId)) return _r32tCache[matchId]||[null,null];
     const m2=ALL_BRACKET.find(x=>x.id===matchId);
     if(!m2) return [null,null];
     return [pp.bracket?.[m2.m1]||null, pp.bracket?.[m2.m2]||null];
@@ -3833,6 +3870,52 @@ function renderAdmin(){
   // KO admin — AGRUPADO POR FASE (R32/R16/QF/SF/3RD/FINAL), orden cronológico DENTRO de cada fase
   const KO_PHASE_LABELS={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'};
   const KO_PHASE_ORDER=['R32','R16','QF','SF','3RD','FINAL'];
+
+  // Candidatos para los selects: solo equipos que pueden llegar ahí realmente,
+  // basados en datos que el admin ya introdujo (tablas de grupos, terceros,
+  // y ganadores reales de la ronda anterior). Evita errores de escritura y
+  // evita poder elegir un equipo ya eliminado.
+  function getCandidatosPartido(matchId){
+    if(BRACKET_R32.some(x=>x.id===matchId)){
+      // 16avos: candidatos = 1ºs + 2ºs de todos los grupos + mejores terceros reales
+      const cands=[];
+      Object.keys(GRUPOS).forEach(g=>{
+        const t=res['tabla_'+g];
+        if(t&&t[0]) cands.push(t[0]);
+        if(t&&t[1]) cands.push(t[1]);
+      });
+      for(let i=1;i<=8;i++){
+        const t=res['mejor_tercero_'+i];
+        if(t) cands.push(t);
+      }
+      return [...new Set(cands)];
+    }
+    const m=ALL_BRACKET.find(x=>x.id===matchId);
+    if(!m) return [];
+    // Rondas siguientes: candidatos = ganadores reales de los partidos que alimentan este
+    const fuentes=[m.m1,m.m2].filter(Boolean);
+    const cands=fuentes.map(src=>{
+      const loser=src.endsWith('_loser');
+      const srcId=loser?src.replace('_loser',''):src;
+      const rm=partidos['KO_'+srcId];
+      if(!rm||!rm.ganador) return null;
+      if(!loser) return rm.ganador;
+      // Perdedor = el equipo real que no es el ganador
+      const kn=res.koNames?.[srcId]||{};
+      if(!kn.local||!kn.visit) return null;
+      return cmp(rm.ganador,kn.local)?kn.visit:kn.local;
+    }).filter(Boolean);
+    return [...new Set(cands)];
+  }
+
+  function koTeamSelect(id,val,cands){
+    let opts='<option value="">Selecciona...</option>';
+    cands.forEach(t=>{ opts+='<option value="'+esc(t)+'" '+(cmp(val,t)?'selected':'')+'>'+esc(t)+'</option>'; });
+    // Si el valor actual no está en los candidatos (dato antiguo / aún no calculado), añadirlo igualmente para no perderlo
+    if(val&&!cands.some(t=>cmp(t,val))) opts+='<option value="'+esc(val)+'" selected>'+esc(val)+' (no detectado)</option>';
+    return '<select class="fi" id="'+id+'">'+opts+'</select>';
+  }
+
   const koAdminHtml=KO_PHASE_ORDER.map(phase=>{
     const matches=getAllBracket().filter(m=>m.phase===phase).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     if(matches.length===0) return '';
@@ -3842,18 +3925,20 @@ function renderAdmin(){
     const matchesHtml=matches.map(m=>{
       const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=res.koNames?.[k]||{};
       const fechaLabel=m.date?fmtDate(m.date).split(',')[0]:'';
+      const cands=getCandidatosPartido(k);
+      const candsPartido=[kn.local,kn.visit].filter(Boolean); // ganador solo puede ser uno de los dos equipos de ESTE partido
       return `<div class="ko-block">
         <div class="lbl">${fechaLabel?'📅 '+fechaLabel+' · ':''}${m.id} (${m.desc})${m.venue?' · '+m.venue:''}</div>
         <div class="row">
-          <input type="text" id="ko-${k}-local" value="${esc(kn.local||'')}" placeholder="Equipo local real">
-          <input type="text" id="ko-${k}-visit" value="${esc(kn.visit||'')}" placeholder="Equipo visitante real">
+          ${koTeamSelect('ko-'+k+'-local', kn.local, cands)}
+          ${koTeamSelect('ko-'+k+'-visit', kn.visit, cands)}
         </div>
         <div class="row">
           <input type="number" min="0" max="20" class="si" id="ko-${k}-gl" value="${rm.gl??''}" placeholder="?">
           <span class="score-dash">-</span>
           <input type="number" min="0" max="20" class="si" id="ko-${k}-gv" value="${rm.gv??''}" placeholder="?">
           <input type="text" id="ko-${k}-pen" value="${esc(rm.pen||'')}" placeholder="Pen? ej: España" style="flex:1">
-          <input type="text" id="ko-${k}-gan" value="${esc(rm.ganador||'')}" placeholder="Ganador real" style="flex:1">
+          ${koTeamSelect('ko-'+k+'-gan', rm.ganador, candsPartido.length?candsPartido:cands)}
         </div>
       </div>`;
     }).join('');
@@ -4690,8 +4775,8 @@ window.guardarGrupos=async function(){
 };
 
 window.guardarKO=async function(){
-  const p={...partidos};
-  const res={...resultados};
+  const p=JSON.parse(JSON.stringify(partidos));
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
   getAllBracket().forEach(m=>{
     const k=m.id;
@@ -4710,7 +4795,10 @@ window.guardarKO=async function(){
   });
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Eliminatoria guardada');
+  calcPoints._cache={};
+  showToast('✅ Eliminatoria guardada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarBote=async function(){
@@ -6159,23 +6247,27 @@ for(const [g, teams] of Object.entries(GRUPOS)){
 // Official FIFA bracket for Round of 32
 // M73-M88: Round of 32 (dieciseisavos)
 // Structure: {id, slot, desc} where desc shows the official matchup
+// Cruces oficiales confirmados por FIFA y verificados con cuadro oficial 433
+// (jun 2026) + ElDesmarque (fechas/horas). Equipos reales donde la fase de
+// grupos ya está resuelta; fórmula de grupo donde depende de la matriz de
+// 8 mejores terceros (495 combinaciones posibles).
 const BRACKET_R32 = [
-  {id:"M73", desc:"2ºA vs 2ºB",  date:"2026-06-28", venue:"Los Angeles"},
-  {id:"M74", desc:"1ºE vs 3er",  date:"2026-06-29", venue:"Boston"},
-  {id:"M75", desc:"1ºF vs 2ºC",  date:"2026-06-29", venue:"Monterrey"},
-  {id:"M76", desc:"1ºC vs 2ºF",  date:"2026-06-29", venue:"Houston"},
-  {id:"M77", desc:"1ºI vs 3er",  date:"2026-06-30", venue:"Nueva York"},
-  {id:"M78", desc:"2ºE vs 2ºI",  date:"2026-06-30", venue:"Dallas"},
-  {id:"M79", desc:"1ºA vs 3er",  date:"2026-06-30", venue:"Azteca"},
-  {id:"M80", desc:"1ºL vs 3er",  date:"2026-07-01", venue:"Atlanta"},
-  {id:"M81", desc:"1ºD vs 3er",  date:"2026-07-01", venue:"San Francisco"},
-  {id:"M82", desc:"1ºG vs 3er",  date:"2026-07-01", venue:"Seattle"},
-  {id:"M83", desc:"2ºK vs 2ºL",  date:"2026-07-02", venue:"Toronto"},
-  {id:"M84", desc:"1ºH vs 2ºJ",  date:"2026-07-02", venue:"Los Angeles"},
-  {id:"M85", desc:"1ºB vs 3er",  date:"2026-07-02", venue:"Vancouver"},
-  {id:"M86", desc:"1ºJ vs 2ºH",  date:"2026-07-03", venue:"Miami"},
-  {id:"M87", desc:"1ºK vs 3er",  date:"2026-07-03", venue:"Kansas City"},
-  {id:"M88", desc:"2ºD vs 2ºG",  date:"2026-07-03", venue:"Dallas"},
+  {id:"M73", desc:"Sudáfrica vs Canadá",        date:"2026-06-28", venue:"Los Angeles"},
+  {id:"M76", desc:"Brasil vs Japón",            date:"2026-06-29", venue:"Houston"},
+  {id:"M74", desc:"Alemania vs Paraguay",       date:"2026-06-29", venue:"Boston"},
+  {id:"M75", desc:"Países Bajos vs Marruecos",  date:"2026-06-29", venue:"Monterrey"},
+  {id:"M78", desc:"Costa de Marfil vs Noruega", date:"2026-06-30", venue:"Dallas"},
+  {id:"M77", desc:"Francia vs Suecia",          date:"2026-06-30", venue:"Nueva York"},
+  {id:"M79", desc:"México vs Ecuador",          date:"2026-07-01", venue:"Azteca"},
+  {id:"M80", desc:"Inglaterra vs R.D. del Congo", date:"2026-07-01", venue:"Atlanta"},
+  {id:"M82", desc:"Bélgica vs Senegal",         date:"2026-07-01", venue:"Seattle"},
+  {id:"M81", desc:"Estados Unidos vs Bosnia Herzegovina", date:"2026-07-01", venue:"San Francisco"},
+  {id:"M84", desc:"España vs Austria",          date:"2026-07-02", venue:"Los Angeles"},
+  {id:"M83", desc:"Colombia vs Ghana",          date:"2026-07-02", venue:"Toronto"},
+  {id:"M85", desc:"Suiza vs Argelia",           date:"2026-07-03", venue:"Vancouver"},
+  {id:"M88", desc:"Australia vs Egipto",        date:"2026-07-03", venue:"Dallas"},
+  {id:"M86", desc:"Argentina vs Cabo Verde",    date:"2026-07-03", venue:"Miami"},
+  {id:"M87", desc:"Portugal vs Croacia",        date:"2026-07-03", venue:"Kansas City"},
 ];
 
 // Octavos: winners of R32 pairs
@@ -6784,6 +6876,23 @@ function _calcPointsRaw(player){
   });
 
   // Bracket (pre-Mundial) - cruce + quién pasa
+  // IMPORTANTE: el cruce se busca por EQUIPOS dentro de toda la ronda, no por
+  // ID de casilla fijo. Si España-Croacia ocurre en la realidad en cualquier
+  // partido de octavos, y el jugador puso ese cruce en CUALQUIER casilla de
+  // octavos de su bracket (en cualquier orden), puntúa igual.
+  let _r32tCache=null; // Evitar recalcular resolveR32Teams en cada llamada del loop de rondas
+  const RONDAS_BRACKET={
+    R32: BRACKET_R32.map(m=>m.id),
+    R16: BRACKET_R16.map(m=>m.id),
+    QF: BRACKET_QF.map(m=>m.id),
+    SF: BRACKET_SF.map(m=>m.id),
+  };
+  function getRondaDe(matchId){
+    for(const [ronda,ids] of Object.entries(RONDAS_BRACKET)){
+      if(ids.includes(matchId)) return ronda;
+    }
+    return null;
+  }
   if(p.bracket){
     ALL_BRACKET.forEach(m=>{
       const myPick=p.bracket[m.id];
@@ -6793,16 +6902,15 @@ function _calcPointsRaw(player){
       const isFinal=m.id==='M104';
       const is3rd=m.id==='M103';
 
-      // Acertar el cruce: los dos equipos de ese partido coinciden con los del jugador
       const [myT1,myT2]=getTeamsForBracket(p,m.id);
-      const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
-        ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
 
       if(isFinal||is3rd){
+        // Final y 3er puesto siguen comparando casilla exacta (solo hay una)
+        const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
+          ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
         if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
         if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
         if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
-        // Subcampeón (perdedor final) / 4º puesto (perdedor partido 3er puesto)
         if(myPick&&myT1&&myT2){
           const myLoser=cmp(myPick,myT1)?myT2:myT1;
           const realLoser=realWinner&&realLocal&&realVisit?(cmp(realWinner,realLocal)?realVisit:realLocal):null;
@@ -6810,15 +6918,32 @@ function _calcPointsRaw(player){
           if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','4º puesto: '+myLoser,getPts('bracket_cuarto'));
         }
       } else {
-        if(cruce_ok) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
-        if(myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Pasa '+m.id+': '+myPick,getPts('bracket_pasa'));
+        // R32/R16/QF/SF: buscar el cruce real en CUALQUIER casilla de la misma ronda del bracket del jugador
+        const ronda=getRondaDe(m.id);
+        const idsRonda=ronda?RONDAS_BRACKET[ronda]:[m.id];
+        let crucePropio=false, pasaPropio=false;
+        if(realLocal&&realVisit){
+          for(const otroId of idsRonda){
+            const [t1,t2]=getTeamsForBracket(p,otroId);
+            if(t1&&t2&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
+              crucePropio=true;
+              const pickOtro=p.bracket[otroId];
+              if(pickOtro&&realWinner&&cmp(pickOtro,realWinner)) pasaPropio=true;
+              break; // un cruce real solo puede coincidir con una casilla del jugador
+            }
+          }
+        }
+        if(crucePropio) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
+        if(pasaPropio) add('bracket_pts','Pasa '+m.id+': '+realWinner,getPts('bracket_pasa'));
       }
     });
   }
 
   function getTeamsForBracket(pp,matchId){
-    const r32t=resolveR32Teams(currentUser||Object.keys(players)[0]);
-    if(BRACKET_R32.some(x=>x.id===matchId)) return r32t[matchId]||[null,null];
+    // FIX: usar el jugador correcto (player) en vez de currentUser — antes
+    // calculaba siempre el bracket del usuario logueado, no del jugador evaluado.
+    if(!_r32tCache) _r32tCache=resolveR32Teams(player);
+    if(BRACKET_R32.some(x=>x.id===matchId)) return _r32tCache[matchId]||[null,null];
     const m2=ALL_BRACKET.find(x=>x.id===matchId);
     if(!m2) return [null,null];
     return [pp.bracket?.[m2.m1]||null, pp.bracket?.[m2.m2]||null];
@@ -7584,8 +7709,8 @@ window.guardarGrupos=async function(){
 };
 
 window.guardarKO=async function(){
-  const p={...partidos};
-  const res={...resultados};
+  const p=JSON.parse(JSON.stringify(partidos));
+  const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
   getAllBracket().forEach(m=>{
     const k=m.id;
@@ -7604,7 +7729,10 @@ window.guardarKO=async function(){
   });
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Eliminatoria guardada');
+  calcPoints._cache={};
+  showToast('✅ Eliminatoria guardada');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarBote=async function(){
