@@ -1418,43 +1418,50 @@ function _calcPointsRaw(player){
       const pmTipo=pm.tipo||(pm.pen?'penaltis':'');
 
       const exactoMarcador=(pmGl===rmGl && pmGv===rmGv);
+      const tipoCoincide=pmTipo&&rmTipo&&pmTipo===rmTipo;
       const hayPenaltisReal=rmTipo==='penaltis';
       const hayPenaltisProno=pmTipo==='penaltis';
+      const aciertaGanadorPasa=rmGanador&&cmp(pm.pasa,rmGanador);
 
       let pts=0, label='', cat='elim';
 
       if(!hayPenaltisReal){
-        // No penalties in real match
-        if(exactoMarcador){
-          // +14: exact score (implies correct winner too)
+        // No penalties in real match (fue 90min o prórroga)
+        if(exactoMarcador&&tipoCoincide){
+          // Marcador exacto Y acierta si fue 90min/prórroga → +25 completo
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
           label='Exacto KO '+k+': '+pmGl+'-'+pmGv;
-          cat='exactos';
-        } else if(rmGanador && cmp(pm.pasa,rmGanador)){
-          // +4: only correct on who passes
+        } else if(exactoMarcador&&!tipoCoincide){
+          // Marcador exacto pero falla 90min↔prórroga → +10 (penalización parcial, nuevo)
+          pts=getPts('exacto_ko_pen');
+          label='Marcador exacto pero falla 90min/prórroga '+k;
+        } else if(aciertaGanadorPasa){
+          // Solo acierta quién pasa → +5
           pts=getPts('pasa_ronda');
           label='Pasa '+k+': '+pm.pasa;
         }
       } else {
         // Real match went to penalties (score in 90+extra was a draw).
-        // El ganador de penaltis ahora se compara via el campo "pasa", no via texto libre.
-        if(hayPenaltisProno && exactoMarcador && rmGanador && cmp(pm.pasa,rmGanador)){
-          // Player predicted penalties, exact draw score AND correct winner → +14
+        // El ganador de penaltis se compara via el campo "pasa", no via texto libre.
+        const aciertaGanadorPenaltis=hayPenaltisProno&&rmGanador&&cmp(pm.pasa,rmGanador);
+        if(hayPenaltisProno && exactoMarcador && aciertaGanadorPenaltis){
+          // Predijo penaltis, empate exacto Y ganador correcto → +25 completo
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
           label='Exacto penaltis '+k+': '+pm.pasa;
-          cat='exactos';
+        } else if(hayPenaltisProno && !exactoMarcador && aciertaGanadorPenaltis){
+          // Predijo penaltis y acierta ganador, pero falla el marcador exacto del empate → +10 (nuevo)
+          pts=getPts('exacto_ko_pen');
+          label='Penaltis (acierta ganador, falla marcador) '+k;
         } else if(hayPenaltisProno && exactoMarcador && rmGanador && !cmp(pm.pasa,rmGanador)){
-          // Player predicted penalties, exact draw score but wrong winner → +5
+          // Predijo penaltis, empate exacto, pero falla el ganador de la tanda → +10
           pts=getPts('exacto_ko_pen');
           label='Penaltis (ganador fallado) '+k;
-        } else if(exactoMarcador){
-          // Player got the 90min/extra score right but didn't mark "penaltis"
-          // Counts as exact score but no penalty bonus → +14 (still got it right)
-          pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto prórroga '+k+': '+pmGl+'-'+pmGv;
-          cat='exactos';
-        } else if(rmGanador && cmp(pm.pasa,rmGanador)){
-          // Only correct on who passes → +4
+        } else if(exactoMarcador&&!hayPenaltisProno){
+          // Acertó el marcador de empate pero no marcó "penaltis" → +10 (falla el tipo)
+          pts=getPts('exacto_ko_pen');
+          label='Empate exacto pero no marcó penaltis '+k;
+        } else if(aciertaGanadorPasa){
+          // Solo acierta quién pasa → +5
           pts=getPts('pasa_ronda');
           label='Pasa '+k+': '+pm.pasa;
         }
@@ -5633,7 +5640,9 @@ function renderComparador(){
             const fallo=rm&&!exacto&&!hitPasa;
             const bg=exacto?'rgba(45,166,83,.25)':hitPasa?'rgba(232,168,32,.2)':fallo?'rgba(232,50,50,.15)':'';
             const color=exacto?'#4ade80':hitPasa?'var(--gold)':fallo?'#f87171':'var(--t1)';
-            const texto=pm.gl+'-'+pm.gv+(pm.pasa?' →'+pm.pasa:'');
+            const tipoLabel=pm.tipo==='penaltis'?' (pen)':pm.tipo==='prorroga'?' (pr)':'';
+            const pasaLabel=pm.pasa?(pm.tipo==='penaltis'?' →'+pm.pasa+' (pen)':' →'+pm.pasa):'';
+            const texto=pm.gl+'-'+pm.gv+tipoLabel+pasaLabel;
             return `<td style="background:${bg};color:${color};text-align:center;font-size:10px;padding:5px 4px;font-weight:${exacto?'700':'400'}">${texto}${exacto?' ✓':hitPasa?' ~':fallo?' ✗':''}</td>`;
           }).join('')}
         </tr>`;
@@ -7092,22 +7101,30 @@ function _calcPointsRaw(player){
       const rmTipo=rm.tipo||(rm.pen?'penaltis':'');
       const pmTipo=pm.tipo||(pm.pen?'penaltis':'');
       const exactoMarcador=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
-      if(exactoMarcador){
-        if(rmTipo==='penaltis'){
-          // El ganador de penaltis se compara via "quién pasa", no via texto libre
-          if(pmTipo==='penaltis'&&pm.pasa&&rm.ganador&&cmp(pm.pasa,rm.ganador)){
-            add('exactos','Exacto penaltis '+m.id+': '+pm.pasa,getPts('exacto_ko'));
-          } else if(pmTipo==='penaltis'){
-            add('exactos','Penaltis (ganador fallado) '+m.id,getPts('exacto_ko_pen'));
-          } else {
-            add('exactos','Marcador KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko_pen'));
-          }
-        } else {
-          add('exactos','Exacto KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko'));
+      const tipoCoincide=pmTipo&&rmTipo&&pmTipo===rmTipo;
+      const aciertaGanadorPasa=rm.ganador&&cmp(pm.pasa,rm.ganador);
+      if(rmTipo==='penaltis'){
+        const aciertaGanadorPenaltis=pmTipo==='penaltis'&&aciertaGanadorPasa;
+        if(pmTipo==='penaltis'&&exactoMarcador&&aciertaGanadorPenaltis){
+          add('elim','Exacto penaltis '+m.id+': '+pm.pasa,getPts('exacto_ko')+getPts('pasa_ronda'));
+        } else if(pmTipo==='penaltis'&&!exactoMarcador&&aciertaGanadorPenaltis){
+          add('elim','Penaltis (acierta ganador, falla marcador) '+m.id,getPts('exacto_ko_pen'));
+        } else if(pmTipo==='penaltis'&&exactoMarcador&&!aciertaGanadorPenaltis){
+          add('elim','Penaltis (ganador fallado) '+m.id,getPts('exacto_ko_pen'));
+        } else if(exactoMarcador&&pmTipo!=='penaltis'){
+          add('elim','Empate exacto pero no marcó penaltis '+m.id,getPts('exacto_ko_pen'));
+        } else if(aciertaGanadorPasa){
+          add('elim','Pasa '+m.id+': '+pm.pasa,getPts('pasa_ronda'));
+        }
+      } else {
+        if(exactoMarcador&&tipoCoincide){
+          add('elim','Exacto KO '+m.id+': '+pm.gl+'-'+pm.gv,getPts('exacto_ko')+getPts('pasa_ronda'));
+        } else if(exactoMarcador&&!tipoCoincide){
+          add('elim','Marcador exacto pero falla 90min/prórroga '+m.id,getPts('exacto_ko_pen'));
+        } else if(aciertaGanadorPasa){
+          add('elim','Pasa '+m.id+': '+pm.pasa,getPts('pasa_ronda'));
         }
       }
-      // Quién pasa
-      if(pm.pasa&&rm.ganador&&cmp(pm.pasa,rm.ganador)) add('elim','Pasa '+m.id+': '+pm.pasa,getPts('pasa_ronda'));
     });
   });
 
