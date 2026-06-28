@@ -1631,6 +1631,37 @@ function getAllBracket(){
   ];
 }
 
+// Reutilizable por calcPoints Y por renderBracket (vista visual) para que
+// ambos usen la misma lógica de "cruce en cualquier casilla de la ronda".
+const RONDAS_BRACKET_GLOBAL={
+  R32: BRACKET_R32.map(m=>m.id),
+  R16: BRACKET_R16.map(m=>m.id),
+  QF: BRACKET_QF.map(m=>m.id),
+  SF: BRACKET_SF.map(m=>m.id),
+};
+function getRondaDeGlobal(matchId){
+  for(const [ronda,ids] of Object.entries(RONDAS_BRACKET_GLOBAL)){
+    if(ids.includes(matchId)) return ronda;
+  }
+  return null;
+}
+// Busca, dentro de la misma ronda que matchId, si el jugador tiene en CUALQUIER
+// casilla un cruce que coincida con realLocal/realVisit. Devuelve el ganador
+// que el jugador eligió en esa casilla encontrada (o null si no hay coincidencia).
+function buscarCruceEnRonda(player,matchId,realLocal,realVisit,getTeamsFn){
+  const ronda=getRondaDeGlobal(matchId);
+  if(!ronda||!realLocal||!realVisit) return null;
+  const idsRonda=RONDAS_BRACKET_GLOBAL[ronda];
+  const p=pronosticos[player]||{};
+  for(const otroId of idsRonda){
+    const [t1,t2]=getTeamsFn(otroId);
+    if(t1&&t2&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
+      return {matchId:otroId, pick:p.bracket?.[otroId]||null};
+    }
+  }
+  return null;
+}
+
 // ═══ RENDER: AVATAR PICKER ═══════════════════════════════
 function renderAvatarPicker(containerId, currentAv, onSelect){
   const el=document.getElementById(containerId);
@@ -2287,7 +2318,24 @@ function renderBracket(){
   function matchCard(matchId, phase){
     const [t1,t2]=getTeamsForMatch(matchId,phase);
     const myPick=p.bracket?.[matchId];
-    const realWinner=partidos['KO_'+matchId]?.ganador;
+    let realWinner=partidos['KO_'+matchId]?.ganador;
+    let crucePropioOk=false;
+    // Comprobar si ESTA casilla concreta del jugador (t1 vs t2) coincide con
+    // los equipos reales de CUALQUIER partido de la misma ronda (no solo matchId).
+    // Esto refleja visualmente el mismo criterio que usa calcPoints para sumar puntos.
+    if((phase==='R32'||phase==='R16'||phase==='QF'||phase==='SF')&&t1&&t2){
+      const idsRonda=RONDAS_BRACKET_GLOBAL[phase]||[];
+      for(const otroId of idsRonda){
+        const realLocal=resultados.koNames?.[otroId]?.local||partidos['KO_'+otroId]?.local;
+        const realVisit=resultados.koNames?.[otroId]?.visit||partidos['KO_'+otroId]?.visit;
+        if(realLocal&&realVisit&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
+          crucePropioOk=true;
+          // El ganador real a comparar es el de ESE partido real encontrado, no necesariamente matchId
+          realWinner=partidos['KO_'+otroId]?.ganador||realWinner;
+          break;
+        }
+      }
+    }
     const isR32=phase==='R32';
     const canPick=!locked&&(t1||t2); // R32 also pickable
     return `<div class="bracket-match${canPick?' clickable':''}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
@@ -2298,7 +2346,8 @@ function renderBracket(){
           :'<span style="font-size:9px;color:var(--t3)">elige→</span>'}
       </div>
       ${teamBox(t2,myPick,realWinner)}
-      ${realWinner?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`:''}
+      ${(crucePropioOk&&realWinner)?`<div style="font-size:8px;color:#4ade80;padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPick&&cmp(myPick,realWinner)?' ✓':''}</div>`
+        :(!crucePropioOk&&realWinner&&phase!=='R32'&&t1&&t2)?`<div style="font-size:8px;color:var(--t3);padding:1px 4px;border-top:1px solid var(--brd2)">Cruce aún no ocurrido</div>`:''}
     </div>`;
   }
 
