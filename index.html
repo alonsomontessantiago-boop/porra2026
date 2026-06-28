@@ -988,8 +988,9 @@ window.normalizarPuntosRetos=function(){
     return r;
   });
   setDoc(doc(db,'meta','retos'),{list:nuevosRetos})
-    .then(function(){
+    .then(async function(){
       calcPoints._cache={};
+      await guardarHistorialRanking(); // Actualizar caché de puntos del login
       showToast('✅ Puntos de retos normalizados');
       renderAdmin();
       renderRanking();
@@ -1008,8 +1009,9 @@ window.aplicarNuevosPuntos=function(){
   const ptsActual=Object.assign({},resultados.pts||{});
   Object.assign(ptsActual,nuevos);
   setDoc(doc(db,'meta','resultados'),{pts:ptsActual},{merge:true})
-    .then(function(){
+    .then(async function(){
       calcPoints._cache={};
+      await guardarHistorialRanking(); // Actualizar caché de puntos del login
       showToast('✅ Nuevos valores aplicados retroactivamente');
       renderAdmin();
       renderRanking();
@@ -1652,10 +1654,12 @@ function renderLogin(){
   const el=document.getElementById('player-list');
   const names=Object.keys(players);
   if(!names.length){ el.innerHTML='<div style="color:var(--t3);font-size:13px;text-align:center">Sé el primero en registrarte 👇</div>'; return; }
-  // Use cached points if available for fast render, then recalc
+  // Si ya tenemos los pronósticos completos cargados, usar el cálculo en vivo
+  // (más preciso). La caché de puntosCache solo es un respaldo rápido mientras
+  // los pronósticos siguen cargando en segundo plano (ver loadAllPronos).
   const cache=resultados.puntosCache||{};
   const sorted=names.map(n=>{
-    const pts=cache[n]!=null?cache[n]:(pronosticos[n]?calcPoints(n).total:0);
+    const pts=pronosticos[n]?calcPoints(n).total:(cache[n]!=null?cache[n]:0);
     return{n,pts};
   }).sort((a,b)=>b.pts-a.pts);
   const crowns=['🥇','🥈','🥉'];
@@ -1990,6 +1994,8 @@ window.guardarPronosticos=async function(){
     }
   }
   await savePronostico(currentUser,p);
+  calcPoints._cache={};
+  renderPronosticos(); // Repintar con los datos ya guardados (antes solo se veía al cambiar de pestaña)
   const ok=document.getElementById('save-ok');
   if(ok){ ok.style.display='block'; setTimeout(()=>ok.style.display='none',2500); }
   renderRanking();
@@ -4682,6 +4688,7 @@ window.guardarPuntos=async function(){
   });
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Puntos actualizados');
   renderAdmin();
   renderRanking();
@@ -4698,19 +4705,24 @@ window.guardarTablas=async function(){
   }
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Tablas guardadas');
   renderAdmin();
   renderRanking();
 };
 
 window.guardarTerceros=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   for(let i=1;i<=8;i++){
     const el=document.getElementById('ar-mejor_tercero_'+i);
     if(el) res['mejor_tercero_'+i]=el.value;
   }
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Terceros guardados');
+  calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
+  showToast('✅ Terceros guardados');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarValidacion=async function(key){
@@ -4727,6 +4739,7 @@ window.guardarValidacion=async function(key){
   });
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Validación guardada');
   renderAdmin();
   renderRanking();
@@ -4810,7 +4823,13 @@ window.guardarKO=async function(){
   });
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
+  // Actualizar variables globales en memoria AHORA, sin esperar al onSnapshot
+  // (que tarda un poco en llegar de vuelta y antes dejaba el render desfasado
+  // hasta cambiar de pestaña y volver).
+  partidos=p;
+  resultados=res;
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Eliminatoria guardada');
   renderAdmin();
   renderRanking();
@@ -7084,10 +7103,12 @@ function renderLogin(){
   const el=document.getElementById('player-list');
   const names=Object.keys(players);
   if(!names.length){ el.innerHTML='<div style="color:var(--t3);font-size:13px;text-align:center">Sé el primero en registrarte 👇</div>'; return; }
-  // Use cached points if available for fast render, then recalc
+  // Si ya tenemos los pronósticos completos cargados, usar el cálculo en vivo
+  // (más preciso). La caché de puntosCache solo es un respaldo rápido mientras
+  // los pronósticos siguen cargando en segundo plano (ver loadAllPronos).
   const cache=resultados.puntosCache||{};
   const sorted=names.map(n=>{
-    const pts=cache[n]!=null?cache[n]:(pronosticos[n]?calcPoints(n).total:0);
+    const pts=pronosticos[n]?calcPoints(n).total:(cache[n]!=null?cache[n]:0);
     return{n,pts};
   }).sort((a,b)=>b.pts-a.pts);
   const crowns=['🥇','🥈','🥉'];
@@ -7345,6 +7366,8 @@ window.guardarPronosticos=async function(){
     }
   }
   await savePronostico(currentUser,p);
+  calcPoints._cache={};
+  renderPronosticos(); // Repintar con los datos ya guardados (antes solo se veía al cambiar de pestaña)
   const ok=document.getElementById('save-ok');
   if(ok){ ok.style.display='block'; setTimeout(()=>ok.style.display='none',2500); }
   renderRanking();
@@ -7616,6 +7639,7 @@ window.guardarPuntos=async function(){
   });
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Puntos actualizados');
   renderAdmin();
   renderRanking();
@@ -7632,19 +7656,24 @@ window.guardarTablas=async function(){
   }
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Tablas guardadas');
   renderAdmin();
   renderRanking();
 };
 
 window.guardarTerceros=async function(){
-  const res={...resultados};
+  const res=JSON.parse(JSON.stringify(resultados));
   for(let i=1;i<=8;i++){
     const el=document.getElementById('ar-mejor_tercero_'+i);
     if(el) res['mejor_tercero_'+i]=el.value;
   }
   await setDoc(doc(db,'meta','resultados'),res);
-  alert('✅ Terceros guardados');
+  calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
+  showToast('✅ Terceros guardados');
+  renderAdmin();
+  renderRanking();
 };
 
 window.guardarValidacion=async function(key){
@@ -7661,6 +7690,7 @@ window.guardarValidacion=async function(key){
   });
   await setDoc(doc(db,'meta','resultados'),res);
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Validación guardada');
   renderAdmin();
   renderRanking();
@@ -7744,7 +7774,13 @@ window.guardarKO=async function(){
   });
   await setDoc(doc(db,'meta','partidos'),p);
   await setDoc(doc(db,'meta','resultados'),res);
+  // Actualizar variables globales en memoria AHORA, sin esperar al onSnapshot
+  // (que tarda un poco en llegar de vuelta y antes dejaba el render desfasado
+  // hasta cambiar de pestaña y volver).
+  partidos=p;
+  resultados=res;
   calcPoints._cache={};
+  await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Eliminatoria guardada');
   renderAdmin();
   renderRanking();
