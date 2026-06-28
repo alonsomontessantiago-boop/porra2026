@@ -2056,21 +2056,35 @@ function renderPronosticos(){
   const koHtml=['R32','R16','QF','SF','3RD','FINAL'].map(phase=>{
     const fk='fase_'+phase+'_abierta';
     const abierta=res[fk];
+    const readOnlyFase=!abierta; // Solo lectura si esta fase concreta está cerrada (no depende de grupos)
     const phaseLabel={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis',FINAL:'Final','3RD':'3er Puesto'}[phase];
-    if(!abierta) return `<div class="phase-hdr">${phaseLabel}</div>
-      <div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;color:var(--t3);font-size:13px">🔒 Ronda bloqueada</div>`;
-    const matches=ALL_BRACKET.filter(m=>m.phase===phase);
+    const matches=getAllBracket().filter(m=>m.phase===phase);
+
+    // Si la ronda nunca se ha abierto Y el jugador no tiene nada guardado aquí, no hay nada que mostrar
+    const tieneAlgoGuardado=matches.some(m=>{
+      const pm=p.partidos?.['KO_'+m.id]||{};
+      return pm.gl!=null||pm.pasa;
+    });
+    if(!abierta&&!tieneAlgoGuardado){
+      return `<div class="phase-hdr">${phaseLabel}</div>
+        <div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px;color:var(--t3);font-size:13px">🔒 Ronda bloqueada — aún no has pronosticado</div>`;
+    }
+
     const dl=res['fase_'+phase+'_deadline'];
     let dlHtml='';
-    if(dl){
+    if(abierta&&dl){
       const diff=new Date(dl)-new Date();
       if(diff>0){
         const dh=Math.floor(diff/3600000),dm=Math.floor((diff%3600000)/60000);
         dlHtml=' · ⏱ cierra en '+(dh>0?dh+'h ':'')+dm+'min';
       }
     }
-    return `<div class="phase-hdr open">${phaseLabel} — ABIERTA ✓${dlHtml}</div>
-      ${matches.map(m=>{
+    const headerHtml=abierta
+      ?`<div class="phase-hdr open">${phaseLabel} — ABIERTA ✓${dlHtml}</div>`
+      :`<div class="phase-hdr">${phaseLabel} — 🔒 Cerrada (tu pronóstico, solo lectura)</div>`;
+
+    return headerHtml+
+      `${matches.map(m=>{
         const k='KO_'+m.id;
         const pm=p.partidos?.[k]||{};
         const rm=partidos[k];
@@ -2084,16 +2098,16 @@ function renderPronosticos(){
           <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
             <span class="match-label" style="font-size:11px">${localL} vs ${visitL}</span>
             <div class="score-pair">
-              <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}">
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gl" value="${pm.gl??''}" ${readOnlyFase?'readonly':''}>
               <span class="score-dash">-</span>
-              <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}">
-              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" placeholder="Pen? ej: España" style="width:90px;font-size:11px">
+              <input type="number" min="0" max="20" class="si" id="pm-${k}-gv" value="${pm.gv??''}" ${readOnlyFase?'readonly':''}>
+              <input type="text" class="fi" id="pm-${k}-pen" value="${pm.pen||''}" ${readOnlyFase?'readonly':''} placeholder="Pen? ej: España" style="width:90px;font-size:11px">
               ${rm?`<span class="badge ${exacto?'badge-ok':'badge-no'}" style="font-size:9px">${exacto?'✓exacto':'Real:'+rm.gl+'-'+rm.gv}</span>`:''}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;width:100%">
             <label style="font-size:11px;color:var(--t2);white-space:nowrap">Quién pasa (+${getPts('pasa_ronda')}):</label>
-            ${teamSelect('pm-'+k+'-pasa',pm.pasa,localTeams,'Equipo...',false)}
+            ${teamSelect('pm-'+k+'-pasa',pm.pasa,localTeams,'Equipo...',readOnlyFase)}
             ${rm?.ganador?`<span class="badge ${hitPasa?'badge-ok':'badge-no'}" style="font-size:9px">${hitPasa?'✓':'era '+rm.ganador}</span>`:''}
           </div>
         </div>`;
