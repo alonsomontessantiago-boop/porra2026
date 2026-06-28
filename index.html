@@ -560,7 +560,7 @@ window.addEventListener('load', function(){
    'guardarValidacion','guardarGrupos','guardarKO','guardarBote',
    'crearReto','toggleReto','deleteReto','guardarGanadoresReto',
    'agregarPenalizacion','quitarPenalizacion','cerrarRegistro','cerrarPronos',
-   'exportarDatos','resetPw','eliminarJugador'
+   'exportarDatos','resetPw','eliminarJugador','renderPronosticos'
   ].forEach(fn => {
     window[fn] = function(...args) {
       if(_ready[fn]) return _ready[fn](...args);
@@ -6147,7 +6147,7 @@ loadPlayers().then(()=>clearTimeout(_loadTimeout)).catch(e=>{
 });
 // Make all module functions globally accessible
 const _fns = {
-  go, logout, closeModal, showOnboarding, obNav,
+  go, logout, closeModal, showOnboarding, obNav, renderPronosticos,
   startLogin: window.startLogin, loginConPw: window.loginConPw,
   cancelPw: window.cancelPw, registrar: window.registrar, checkAdmin: window.checkAdmin,
   guardarPronosticos: window.guardarPronosticos, guardarBracket: window.guardarBracket,
@@ -8739,7 +8739,7 @@ loadPlayers().then(()=>clearTimeout(_loadTimeout)).catch(e=>{
 });
 // Make all module functions globally accessible
 const _fns = {
-  go, logout, closeModal, showOnboarding, obNav,
+  go, logout, closeModal, showOnboarding, obNav, renderPronosticos,
   startLogin: window.startLogin, loginConPw: window.loginConPw,
   cancelPw: window.cancelPw, registrar: window.registrar, checkAdmin: window.checkAdmin,
   guardarPronosticos: window.guardarPronosticos, guardarBracket: window.guardarBracket,
