@@ -2295,7 +2295,7 @@ function renderBracket(){
     return [p.bracket?.[m.m1]||null, p.bracket?.[m.m2]||null];
   }
 
-  function teamBox(team, myPick, realWinner){
+  function teamBox(team, myPick, realWinner, esConfirmadoPendiente){
     if(!team) return `<div class="bracket-team"><span style="color:var(--t3);font-size:10px">pendiente</span></div>`;
     const isPick=myPick&&cmp(myPick,team);
     const isReal=realWinner&&cmp(realWinner,team);
@@ -2305,6 +2305,9 @@ function renderBracket(){
       if(isPick&&isReal){ bg='background:rgba(74,222,128,.18);'; txtColor='#4ade80'; icon=' ✓'; fontWeight='font-weight:700;'; }
       else if(isPick&&!isReal){ bg='background:rgba(248,113,113,.14);'; txtColor='#f87171'; icon=' ✗'; fontWeight='font-weight:700;'; }
       else if(isReal&&!isPick){ bg='background:rgba(74,222,128,.08);'; txtColor='#4ade80'; }
+    } else if(esConfirmadoPendiente&&isPick){
+      // Cruce ya confirmado (sabemos los dos equipos) pero aún sin jugar: color intermedio azul
+      bg='background:rgba(96,165,250,.16);'; txtColor='#60a5fa'; fontWeight='font-weight:700;';
     } else if(isPick){
       txtColor='var(--gold)'; fontWeight='font-weight:700;';
     }
@@ -2329,9 +2332,10 @@ function renderBracket(){
     const myPick=p.bracket?.[matchId];
     let realWinner=partidos['KO_'+matchId]?.ganador;
     let crucePropioOk=false;
+    let crucePropioConfirmado=false; // true si los equipos ya están confirmados (koNames), aunque no haya ganador
     // Comprobar si ESTA casilla concreta del jugador (t1 vs t2) coincide con
-    // los equipos reales de CUALQUIER partido de la misma ronda (no solo matchId).
-    // Esto refleja visualmente el mismo criterio que usa calcPoints para sumar puntos.
+    // los equipos reales (confirmados o ya jugados) de CUALQUIER partido de la
+    // misma ronda. Esto refleja visualmente el mismo criterio que usa calcPoints.
     if((phase==='R32'||phase==='R16'||phase==='QF'||phase==='SF')&&t1&&t2){
       const idsRonda=RONDAS_BRACKET_GLOBAL[phase]||[];
       for(const otroId of idsRonda){
@@ -2339,6 +2343,7 @@ function renderBracket(){
         const realVisit=resultados.koNames?.[otroId]?.visit||partidos['KO_'+otroId]?.visit;
         if(realLocal&&realVisit&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
           crucePropioOk=true;
+          crucePropioConfirmado=true;
           // El ganador real a comparar es el de ESE partido real encontrado, no necesariamente matchId
           realWinner=partidos['KO_'+otroId]?.ganador||realWinner;
           break;
@@ -2347,22 +2352,25 @@ function renderBracket(){
     }
     const isR32=phase==='R32';
     const canPick=!locked&&(t1||t2); // R32 also pickable
-    // Borde de toda la card según el estado global del partido (acierto/fallo/pendiente)
+    const hayGanadorReal=!!realWinner;
+    // Borde de toda la card según el estado global del partido
     const myPickGano=myPick&&realWinner&&cmp(myPick,realWinner);
     const myPickFallo=myPick&&realWinner&&!cmp(myPick,realWinner);
     let borderStyle='border:1px solid var(--brd);';
-    if(crucePropioOk&&myPickGano) borderStyle='border:1.5px solid rgba(74,222,128,.5);';
-    else if(crucePropioOk&&myPickFallo) borderStyle='border:1.5px solid rgba(248,113,113,.4);';
+    if(crucePropioOk&&myPickGano) borderStyle='border:1.5px solid rgba(74,222,128,.5);'; // resultado real, acertó
+    else if(crucePropioOk&&myPickFallo) borderStyle='border:1.5px solid rgba(248,113,113,.4);'; // resultado real, falló
+    else if(crucePropioConfirmado&&!hayGanadorReal) borderStyle='border:1.5px solid rgba(96,165,250,.5);'; // cruce confirmado, aún sin jugar
     return `<div class="bracket-match${canPick?' clickable':''}" style="${borderStyle}" ${canPick?`onclick="openBracketPick('${matchId}')"`:''}>
-      ${teamBox(t1,myPick,realWinner)}
+      ${teamBox(t1,myPick,realWinner,crucePropioConfirmado&&!hayGanadorReal)}
       <div style="font-size:8px;color:var(--t3);padding:1px 4px;display:flex;justify-content:space-between;align-items:center">
         <span>vs</span>
         ${myPick?`<span style="font-size:9px;color:var(--gold);max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">→${myPick}</span>`
           :'<span style="font-size:9px;color:var(--t3)">elige→</span>'}
       </div>
-      ${teamBox(t2,myPick,realWinner)}
-      ${(crucePropioOk&&realWinner)?`<div style="font-size:8px;color:${myPickGano?'#4ade80':myPickFallo?'#f87171':'var(--t3)'};padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPickGano?' ✓':myPickFallo?' ✗':''}</div>`
-        :(!crucePropioOk&&realWinner&&phase!=='R32'&&t1&&t2)?`<div style="font-size:8px;color:var(--t3);padding:1px 4px;border-top:1px solid var(--brd2)">Cruce aún no ocurrido</div>`:''}
+      ${teamBox(t2,myPick,realWinner,crucePropioConfirmado&&!hayGanadorReal)}
+      ${(crucePropioOk&&hayGanadorReal)?`<div style="font-size:8px;color:${myPickGano?'#4ade80':myPickFallo?'#f87171':'var(--t3)'};padding:1px 4px;border-top:1px solid var(--brd2)">Real: ${realWinner}${myPickGano?' ✓':myPickFallo?' ✗':''}</div>`
+        :(crucePropioConfirmado&&!hayGanadorReal)?`<div style="font-size:8px;color:#60a5fa;padding:1px 4px;border-top:1px solid var(--brd2)">🔵 Cruce confirmado · pendiente de jugar</div>`
+        :(!crucePropioOk&&phase!=='R32'&&t1&&t2)?`<div style="font-size:8px;color:var(--t3);padding:1px 4px;border-top:1px solid var(--brd2)">Cruce aún no ocurrido</div>`:''}
     </div>`;
   }
 
@@ -5469,7 +5477,7 @@ function renderComparador(){
         ${names.map(n=>`<button class="btn ${selectedPlayers.includes(n)?'btn-p':'btn-s'} btn-sm" onclick="toggleCompPlayer('${esc(n)}')">${players[n]?.avatar||'⚽'} ${n}</button>`).join('')}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${['all','grupos','premios','bracket'].map(f=>`<button class="btn ${phase===f?'btn-p':'btn-s'} btn-xs" onclick="setCompPhase('${f}')">${{all:'Todo',grupos:'Grupos',premios:'Premios',bracket:'Bracket'}[f]}</button>`).join('')}
+        ${['all','grupos','elim','premios','bracket'].map(f=>`<button class="btn ${phase===f?'btn-p':'btn-s'} btn-xs" onclick="setCompPhase('${f}')">${{all:'Todo',grupos:'Grupos',elim:'Eliminatorias',premios:'Premios',bracket:'Bracket'}[f]}</button>`).join('')}
       </div>
     </div>`;
 
@@ -5575,6 +5583,42 @@ function renderComparador(){
 
     rows+=headerRow('🎯 Mejores terceros');
     for(let i=1;i<=8;i++) rows+=dataRow(`Tercero ${i}`, `tercero_pool_${i}`, gruposClosed);
+  }
+
+  if(phase==='all'||phase==='elim'){
+    // ── Eliminatorias: marcadores + quién pasa, agrupado por ronda ────────
+    rows+=headerRow('🎯 Fase eliminatoria — marcadores y quién pasa');
+    const KO_PHASE_LABELS_CMP={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis','3RD':'3er Puesto',FINAL:'Final'};
+    ['R32','R16','QF','SF','3RD','FINAL'].forEach(faseId=>{
+      const faseAbiertaOCerrada=res['fase_'+faseId+'_abierta']!=null; // se ha abierto alguna vez
+      const faseVisible=faseAbiertaOCerrada; // visible en cuanto el admin la abrió por primera vez
+      const matches=getAllBracket().filter(m=>m.phase===faseId);
+      if(matches.length===0) return;
+      rows+=`<tr><td colspan="${selectedPlayers.length+1}" style="background:var(--gd);color:var(--gold);font-size:10px;font-weight:700;padding:4px 8px">${KO_PHASE_LABELS_CMP[faseId]}${!faseVisible?' 🔒':''}</td></tr>`;
+      matches.forEach(m=>{
+        const k='KO_'+m.id;
+        const rm=partidos[k];
+        const kn=res.koNames?.[m.id]||{};
+        const localL=kn.local||m.desc?.split(' vs ')[0]||'Equipo A';
+        const visitL=kn.visit||m.desc?.split(' vs ')[1]||'Equipo B';
+        const realGl=rm?.gl, realGv=rm?.gv;
+        rows+=`<tr>
+          <td style="font-size:10px;color:var(--t2);padding:5px 8px;background:var(--s2);white-space:nowrap">${localL} vs ${visitL}</td>
+          ${selectedPlayers.map(n=>{
+            if(!faseVisible) return `<td style="background:var(--s2);color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">🔒</td>`;
+            const pm=(pronosticos[n]||{}).partidos?.[k];
+            if(!pm||pm.gl==null) return `<td style="color:var(--t3);text-align:center;font-size:11px;padding:5px 4px">—</td>`;
+            const exacto=rm&&Number(pm.gl)===Number(realGl)&&Number(pm.gv)===Number(realGv);
+            const hitPasa=rm?.ganador&&cmp(pm.pasa,rm.ganador);
+            const fallo=rm&&!exacto&&!hitPasa;
+            const bg=exacto?'rgba(45,166,83,.25)':hitPasa?'rgba(232,168,32,.2)':fallo?'rgba(232,50,50,.15)':'';
+            const color=exacto?'#4ade80':hitPasa?'var(--gold)':fallo?'#f87171':'var(--t1)';
+            const texto=pm.gl+'-'+pm.gv+(pm.pasa?' →'+pm.pasa:'');
+            return `<td style="background:${bg};color:${color};text-align:center;font-size:10px;padding:5px 4px;font-weight:${exacto?'700':'400'}">${texto}${exacto?' ✓':hitPasa?' ~':fallo?' ✗':''}</td>`;
+          }).join('')}
+        </tr>`;
+      });
+    });
   }
 
   if(phase==='all'||phase==='bracket'){
