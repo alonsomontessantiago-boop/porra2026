@@ -363,6 +363,10 @@ window.addEventListener('load', function(){
   </div>
   <button class="menu-pill" onclick="openNav()">☰ Menú</button>
 </div>
+<div id="impersonate-banner" style="display:none;background:rgba(232,168,32,.15);border-bottom:2px solid var(--gold);padding:8px 14px;display:flex;justify-content:space-between;align-items:center">
+  <span style="font-size:12px;color:var(--gold);font-weight:700">👤 Viendo como otro jugador</span>
+  <button onclick="volverAAdmin()" style="background:var(--gold);color:#1a0a2e;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">← Volver a Admin</button>
+</div>
 
 <!-- TABS -->
 <div id="tabs" style="display:none"></div>
@@ -462,9 +466,9 @@ window.addEventListener('load', function(){
   <div id="stats-content"></div>
 </div>
 
-<!-- AVISOS -->
+<!-- DESGLOSE PARTIDOS (sustituye avisos) -->
 <div id="avisos-page" class="page">
-  <div class="sec">📢 Avisos del admin</div>
+  <div class="sec">📊 Desglose partidos</div>
   <div id="avisos-content"></div>
 </div>
 
@@ -560,7 +564,7 @@ window.addEventListener('load', function(){
    'guardarValidacion','guardarGrupos','guardarKO','guardarBote',
    'crearReto','toggleReto','deleteReto','guardarGanadoresReto',
    'agregarPenalizacion','quitarPenalizacion','cerrarRegistro','cerrarPronos',
-   'exportarDatos','resetPw','eliminarJugador','renderPronosticos','validarTipoKO'
+   'exportarDatos','resetPw','eliminarJugador','renderPronosticos','validarTipoKO','renderDesglose'
   ].forEach(fn => {
     window[fn] = function(...args) {
       if(_ready[fn]) return _ready[fn](...args);
@@ -3834,15 +3838,98 @@ function renderStats(){
 
 
 // ═══ RENDER: AVISOS ═══════════════════════════════════
-function renderAvisos(){
+// Genera el desglose de puntos de UN partido concreto (grupos o KO), comparando
+// el resultado real contra el pronóstico de cada jugador.
+function generarDesglosePartido(matchId, esKO, localL, visitL, marcadorReal){
+  const filas=[];
+  Object.keys(players).forEach(n=>{
+    const before=calcPoints(n).total; // ya incluye este resultado porque se llama DESPUÉS de guardar
+    // Recalculamos qué aportó específicamente este partido mirando pt.details
+    const detalles=calcPoints(n).details.filter(d=>d.label && d.label.includes(matchId));
+    if(detalles.length){
+      const total=detalles.reduce((s,d)=>s+d.v,0);
+      filas.push({jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')});
+    }
+  });
+  filas.sort((a,b)=>b.pts-a.pts);
+  return {
+    matchId, esKO, local:localL, visit:visitL, marcador:marcadorReal,
+    fecha:new Date().toISOString(),
+    filas
+  };
+}
+
+window._gambDeskTab=window._gambDeskTab||'partidos'; // sub-pestaña activa en Desglose
+
+function renderDesglose(){
   const el=document.getElementById('avisos-content');
-  const av=resultados.avisos||[];
-  if(!av.length){ el.innerHTML='<div class="empty">Sin avisos todavía</div>'; return; }
-  el.innerHTML=[...av].reverse().map(a=>`
-    <div class="aviso-card">
-      <div class="aviso-date">${fmtDate(a.fecha)}</div>
-      <div class="aviso-msg">${a.msg}</div>
-    </div>`).join('');
+  if(!el) return;
+  const tab=window._gambDeskTab||'partidos';
+
+  const tabsHtml='<div style="display:flex;gap:6px;margin-bottom:14px">'
+    +['partidos','bracket','retos'].map(function(t){
+      var sel=tab===t;
+      var label=t==='partidos'?'⚽ Partidos':t==='bracket'?'🗂️ Bracket':'🎯 Retos';
+      return '<button data-dtab="'+t+'" onclick="window._gambDeskTab=this.dataset.dtab;renderDesglose()" style="flex:1;padding:8px 4px;border-radius:8px;border:2px solid '+(sel?'var(--purple)':'var(--brd)')+';background:'+(sel?'rgba(139,92,246,.15)':'var(--s2)')+';color:'+(sel?'#c084fc':'var(--t2)')+';font-size:12px;font-weight:700;cursor:pointer">'+label+'</button>';
+    }).join('')
+    +'</div>';
+
+  if(tab==='partidos'){
+    const hist=resultados.historialDesgloses||[];
+    if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Sin resultados metidos todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
+      var filasHtml=d.filas.length
+        ?d.filas.map(function(f){
+          return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
+            +'<span>'+f.jugador+'</span>'
+            +'<span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span>'
+            +'</div>'
+            +'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>';
+        }).join('')
+        :'<div style="font-size:12px;color:var(--t3);padding:8px">Nadie se llevó puntos en este partido</div>';
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">'+d.local+' '+d.marcador+' '+d.visit+'</div>'
+        +'<div style="margin-top:8px">'+filasHtml+'</div>'
+        +'</div>';
+    }).join('');
+  } else if(tab==='bracket'){
+    const hist=resultados.historialBracketRondas||[];
+    if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Ninguna ronda de bracket cerrada todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
+      var filasHtml=d.filas.map(function(f){
+        return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
+          +'<span>'+f.jugador+'</span><span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span></div>';
+      }).join('');
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">🗂️ '+d.ronda+'</div>'
+        +'<div style="margin-top:8px">'+filasHtml+'</div>'
+        +'</div>';
+    }).join('');
+  } else if(tab==='retos'){
+    // Mostrar retos cuyo plazo ya pasó (cerrado o deadline vencido) — el plazo de
+    // RESPUESTA, no necesariamente ya validados por el admin (r.resuelto).
+    const retosCerrados=(retos||[]).filter(r=>r.cerrado||(r.deadline&&new Date()>new Date(r.deadline)));
+    if(!retosCerrados.length){ el.innerHTML=tabsHtml+'<div class="empty">Ningún reto con el plazo cerrado todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...retosCerrados].reverse().map(function(r){
+      var respuestasHtml=Object.keys(players).map(function(n){
+        const p=pronosticos[n]||{};
+        const resp=p.retos?.[r.id];
+        const acerto=r.resuelto&&r.ganadores&&r.ganadores[n];
+        if(!resp) return '<div style="font-size:11px;color:var(--t3);padding:3px 8px">'+n+': sin responder</div>';
+        var icon=!r.resuelto?'⏳':(acerto?'✅':'❌');
+        var color=!r.resuelto?'var(--t2)':(acerto?'#4ade80':'#f87171');
+        return '<div style="font-size:11px;color:'+color+';padding:3px 8px">'+icon+' '+n+': '+resp+'</div>';
+      }).join('');
+      var estadoLabel=r.resuelto?'✓ Resuelto':'⏳ Cerrado, pendiente de validar';
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:2px">🎯 '+r.titulo+' <span style="font-size:11px;color:var(--gold)">+'+r.pts+'pts</span></div>'
+        +'<div style="font-size:10px;color:var(--t3);margin-bottom:6px">'+estadoLabel+'</div>'
+        +respuestasHtml
+        +'</div>';
+    }).join('');
+  }
 }
 
 // ═══ RENDER: NORMAS ═══════════════════════════════════
@@ -4020,6 +4107,7 @@ function renderAdmin(){
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-xs btn-p" onclick="entrarComo('${esc(name)}')">👤 Entrar como</button>
         <button class="btn-xs btn-s" onclick="resetPw('${esc(name)}')">Reset pw</button>
         <button class="btn-xs ${(pronosticos[name]||{})._locked?'btn-g':'btn-danger'}" onclick="toggleReopenPronos('${esc(name)}')">${(pronosticos[name]||{})._locked?'🔓 Reabrir':'🔒 Cerrar'}</button>
         <button class="btn-xs btn-s" onclick="verHistorial('${esc(name)}')">📋 Historial</button>
@@ -4937,14 +5025,33 @@ async function guardarHistorialRanking(){
 
 window.guardarGrupos=async function(){
   const p={...partidos};
+  const nuevosResultados=[]; // partidos que pasan de sin-resultado a con-resultado en este guardado
   GROUP_MATCHES.forEach(m=>{
     const gl=document.getElementById('gm-'+m.id+'-gl');
     const gv=document.getElementById('gm-'+m.id+'-gv');
-    if(gl&&gl.value!==''&&gv&&gv.value!=='') p[m.id]={gl:Number(gl.value),gv:Number(gv.value)};
+    if(gl&&gl.value!==''&&gv&&gv.value!==''){
+      const yaTenia=partidos[m.id]?.gl!=null;
+      p[m.id]={gl:Number(gl.value),gv:Number(gv.value)};
+      if(!yaTenia) nuevosResultados.push({id:m.id,local:m.local,visit:m.visit,gl:gl.value,gv:gv.value});
+    }
   });
   await setDoc(doc(db,'meta','partidos'),p);
+  partidos=p; // actualizar memoria local inmediatamente (no esperar al onSnapshot)
+  calcPoints._cache={};
   await guardarHistorialRanking();
-  alert('✅ Grupos guardados');
+  // Generar desglose del último partido nuevo con resultado (si hay varios, el último de la lista)
+  if(nuevosResultados.length){
+    const ultimo=nuevosResultados[nuevosResultados.length-1];
+    const desglose=generarDesglosePartido(ultimo.id,false,ultimo.local,ultimo.visit,ultimo.gl+'-'+ultimo.gv);
+    const res=JSON.parse(JSON.stringify(resultados));
+    if(!res.historialDesgloses) res.historialDesgloses=[];
+    res.historialDesgloses.push(desglose);
+    if(res.historialDesgloses.length>100) res.historialDesgloses=res.historialDesgloses.slice(-100);
+    await setDoc(doc(db,'meta','resultados'),res);
+    resultados=res;
+  }
+  showToast('✅ Grupos guardados');
+  renderAdmin();
 };
 
 window.guardarKO=async function(){
@@ -4952,6 +5059,7 @@ window.guardarKO=async function(){
   const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
   let errorValidacion=null;
+  const nuevosResultados=[]; // partidos KO que pasan de sin-resultado a con-resultado
   getAllBracket().forEach(m=>{
     const k=m.id;
     const local=document.getElementById('ko-'+k+'-local')?.value.trim();
@@ -4969,9 +5077,17 @@ window.guardarKO=async function(){
       } else if(tipo==='penaltis'&&!esEmpate){
         errorValidacion=m.id+': si es penaltis, el marcador debe ser empate';
       }
+      const yaTenia=partidos['KO_'+k]?.gl!=null;
       p['KO_'+k]={gl:glNum,gv:gvNum};
       if(tipo) p['KO_'+k].tipo=tipo;
       if(gan) p['KO_'+k].ganador=gan;
+      if(!yaTenia){
+        const kn=res.koNames?.[k]||{local:local||'?',visit:visit||'?'};
+        let marcadorTxt=glNum+'-'+gvNum;
+        if(tipo==='prorroga') marcadorTxt+=' (prórroga)';
+        else if(tipo==='penaltis') marcadorTxt+=' (pen: '+(gan||'?')+')';
+        nuevosResultados.push({id:k,local:kn.local,visit:kn.visit,marcador:marcadorTxt});
+      }
     }
   });
   if(errorValidacion){
@@ -4987,6 +5103,38 @@ window.guardarKO=async function(){
   resultados=res;
   calcPoints._cache={};
   await guardarHistorialRanking(); // Actualizar caché de puntos del login
+  // Generar desglose del último partido KO nuevo con resultado
+  if(nuevosResultados.length){
+    const ultimo=nuevosResultados[nuevosResultados.length-1];
+    const desglose=generarDesglosePartido(ultimo.id,true,ultimo.local,ultimo.visit,ultimo.marcador);
+    const res2=JSON.parse(JSON.stringify(resultados));
+    if(!res2.historialDesgloses) res2.historialDesgloses=[];
+    res2.historialDesgloses.push(desglose);
+    if(res2.historialDesgloses.length>100) res2.historialDesgloses=res2.historialDesgloses.slice(-100);
+    await setDoc(doc(db,'meta','resultados'),res2);
+    resultados=res2;
+  }
+  // Detectar si alguna ronda de BRACKET acaba de quedar completa (todos sus
+  // partidos con ganador real) y aún no se ha generado su desglose.
+  const RONDAS_DESGLOSE={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'};
+  for(const [faseId,faseLabel] of Object.entries(RONDAS_DESGLOSE)){
+    const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
+    if(!idsRonda.length) continue;
+    const todosConGanador=idsRonda.every(id=>partidos['KO_'+id]?.ganador);
+    const yaGenerado=(resultados.historialBracketRondas||[]).some(d=>d.ronda===faseLabel);
+    if(todosConGanador&&!yaGenerado){
+      const filas=Object.keys(players).map(n=>{
+        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.some(id=>d.label&&d.label.includes(id)));
+        const total=detalles.reduce((s,d)=>s+d.v,0);
+        return {jugador:n,pts:total};
+      }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
+      const res3=JSON.parse(JSON.stringify(resultados));
+      if(!res3.historialBracketRondas) res3.historialBracketRondas=[];
+      res3.historialBracketRondas.push({ronda:faseLabel,fecha:new Date().toISOString(),filas});
+      await setDoc(doc(db,'meta','resultados'),res3);
+      resultados=res3;
+    }
+  }
   showToast('✅ Eliminatoria guardada');
   renderAdmin();
   renderRanking();
@@ -5368,6 +5516,31 @@ window.resetPw=async function(name){
   await setDoc(doc(db,'players',name),pl);
   players[name]=pl;
   alert('✅ Contraseña reseteada');
+};
+
+window.entrarComo=async function(name){
+  if(!confirm('¿Entrar como "'+name+'"? Verás su vista exacta. Podrás volver a Admin con el botón que aparecerá arriba.')) return;
+  window._adminImpersonating=currentUser; // guardamos quién era el admin original (su propio nombre de jugador)
+  window._wasAdmin=isAdmin;
+  isAdmin=false; // se oculta el menú admin mientras impersonas, para evitar confusión
+  await doLogin(name);
+  go('ranking');
+  const banner=document.getElementById('impersonate-banner');
+  if(banner) banner.style.display='flex';
+  showToast('👤 Ahora ves la app como '+name);
+};
+
+window.volverAAdmin=async function(){
+  const original=window._adminImpersonating;
+  isAdmin=window._wasAdmin||true;
+  window._adminImpersonating=null;
+  const banner=document.getElementById('impersonate-banner');
+  if(banner) banner.style.display='none';
+  if(original&&players[original]){
+    await doLogin(original);
+  }
+  go('admin');
+  showToast('✅ Has vuelto a tu cuenta de admin');
 };
 
 window.eliminarJugador=async function(name){
@@ -5890,16 +6063,24 @@ function renderEvolucion(){
 function renderAvisoRanking(){
   const el=document.getElementById('aviso-ranking');
   if(!el) return;
-  const avisos=resultados.avisos||[];
-  if(!avisos.length){el.innerHTML='';return;}
-  const last=avisos[avisos.length-1];
-  el.innerHTML=`<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start">
-    <span style="font-size:18px;flex-shrink:0">📢</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:11px;color:var(--t3);margin-bottom:2px">${fmtDate(last.fecha)}</div>
-      <div style="font-size:13px;color:var(--t1);font-weight:600">${last.msg}</div>
-    </div>
-  </div>`;
+  const hist=resultados.historialDesgloses||[];
+  if(!hist.length){el.innerHTML='';return;}
+  const last=hist[hist.length-1];
+  const filasHtml=last.filas.length
+    ?last.filas.map(function(f){
+      return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">'
+        +'<span style="color:var(--t2)">'+f.jugador+'</span>'
+        +'<span style="color:#4ade80;font-weight:700">+'+f.pts+'</span></div>';
+    }).join('')
+    :'<div style="font-size:11px;color:var(--t3)">Nadie se llevó puntos en este partido</div>';
+  el.innerHTML='<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<span style="font-size:11px;color:var(--t3)">📊 Último resultado · '+fmtDate(last.fecha)+'</span>'
+    +'<button onclick="go(\'avisos\')" style="font-size:10px;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline">Ver historial</button>'
+    +'</div>'
+    +'<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">'+last.local+' '+last.marcador+' '+last.visit+'</div>'
+    +filasHtml
+    +'</div>';
 }
 
 // ═══ PARTIDO DEL DÍA ════════════════════════════════════════════════════
@@ -5907,17 +6088,23 @@ function renderPartidoDelDia(){
   const el=document.getElementById('partido-del-dia');
   if(!el) return;
   const now=new Date();
-  const todayStr=now.toISOString().split('T')[0];
-  // Find today's matches from fixture
-  // Last played match (most recent with result)
-  const allMatches=Object.entries(FIXTURE_DATES).sort((a,b)=>a[1].date.localeCompare(b[1].date));
+  // Combinar fixture de GRUPOS + ELIMINATORIAS, para que la card avance
+  // automáticamente de ronda en ronda en vez de quedarse atascada al
+  // terminar los 72 partidos de grupos.
+  const gruposMatches=Object.entries(FIXTURE_DATES).map(([id,m])=>({id,local:m.local,visit:m.visit,date:m.date}));
+  const koMatches=getAllBracket().map(m=>{
+    const kn=resultados.koNames?.[m.id]||{};
+    return {id:'KO_'+m.id, local:kn.local||m.desc?.split(' vs ')[0]||'?', visit:kn.visit||m.desc?.split(' vs ')[1]||'?', date:m.date};
+  }).filter(m=>m.date); // solo partidos con fecha conocida
+  const allMatches=[...gruposMatches,...koMatches].map(m=>[m.id,m]).sort((a,b)=>(a[1].date||'').localeCompare(b[1].date||''));
+
   const played=allMatches.filter(([id,m])=>partidos[id]?.gl!=null);
-  const upcoming=allMatches.filter(([id,m])=>!partidos[id]?.gl!=null||partidos[id]?.gl==null).filter(([id,m])=>new Date(m.date)>new Date(now.getTime()-7200000));
-  
+  const upcoming=allMatches.filter(([id,m])=>partidos[id]?.gl==null).filter(([id,m])=>new Date(m.date)>new Date(now.getTime()-7200000));
+
   const lastPlayed=played.length?[played[played.length-1]]:[];
   const next3=upcoming.slice(0,3);
   const featured=[...lastPlayed,...next3];
-  
+
   if(!featured.length){el.innerHTML='';return;}
   const label='⚽ Partidos';
 
@@ -5950,6 +6137,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
+  {id:'avisos',          icon:'📊', label:'Desglose partidos'},
   {id:'stats',           icon:'🎰', label:'Gambling', hidden:!GAMBLING_ENABLED},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
@@ -6003,10 +6191,7 @@ window.go=function(tab){
   else if(tab==='retos') renderRetos();
   else if(tab==='stats') renderStats();
   else if(tab==='avisos'){
-    renderAvisos();
-    // Mark avisos as read
-    if(currentUser) localStorage.setItem('avisos_read_'+currentUser, (resultados.avisos||[]).length);
-    const b=document.getElementById('badge-avisos'); if(b) b.style.display='none';
+    renderDesglose();
   }
   else if(tab==='normas') renderNormas();
   else if(tab==='perfil') renderPerfil();
@@ -6349,7 +6534,7 @@ loadPlayers().then(()=>clearTimeout(_loadTimeout)).catch(e=>{
 });
 // Make all module functions globally accessible
 const _fns = {
-  go, logout, closeModal, showOnboarding, obNav, renderPronosticos,
+  go, logout, closeModal, showOnboarding, obNav, renderPronosticos, renderDesglose,
   startLogin: window.startLogin, loginConPw: window.loginConPw,
   cancelPw: window.cancelPw, registrar: window.registrar, checkAdmin: window.checkAdmin,
   guardarPronosticos: window.guardarPronosticos, guardarBracket: window.guardarBracket,
@@ -7632,15 +7817,98 @@ window.guardarPronosticos=async function(){
 // ═══ RENDER: STATS ════════════════════════════════════
 
 // ═══ RENDER: AVISOS ═══════════════════════════════════
-function renderAvisos(){
+// Genera el desglose de puntos de UN partido concreto (grupos o KO), comparando
+// el resultado real contra el pronóstico de cada jugador.
+function generarDesglosePartido(matchId, esKO, localL, visitL, marcadorReal){
+  const filas=[];
+  Object.keys(players).forEach(n=>{
+    const before=calcPoints(n).total; // ya incluye este resultado porque se llama DESPUÉS de guardar
+    // Recalculamos qué aportó específicamente este partido mirando pt.details
+    const detalles=calcPoints(n).details.filter(d=>d.label && d.label.includes(matchId));
+    if(detalles.length){
+      const total=detalles.reduce((s,d)=>s+d.v,0);
+      filas.push({jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')});
+    }
+  });
+  filas.sort((a,b)=>b.pts-a.pts);
+  return {
+    matchId, esKO, local:localL, visit:visitL, marcador:marcadorReal,
+    fecha:new Date().toISOString(),
+    filas
+  };
+}
+
+window._gambDeskTab=window._gambDeskTab||'partidos'; // sub-pestaña activa en Desglose
+
+function renderDesglose(){
   const el=document.getElementById('avisos-content');
-  const av=resultados.avisos||[];
-  if(!av.length){ el.innerHTML='<div class="empty">Sin avisos todavía</div>'; return; }
-  el.innerHTML=[...av].reverse().map(a=>`
-    <div class="aviso-card">
-      <div class="aviso-date">${fmtDate(a.fecha)}</div>
-      <div class="aviso-msg">${a.msg}</div>
-    </div>`).join('');
+  if(!el) return;
+  const tab=window._gambDeskTab||'partidos';
+
+  const tabsHtml='<div style="display:flex;gap:6px;margin-bottom:14px">'
+    +['partidos','bracket','retos'].map(function(t){
+      var sel=tab===t;
+      var label=t==='partidos'?'⚽ Partidos':t==='bracket'?'🗂️ Bracket':'🎯 Retos';
+      return '<button data-dtab="'+t+'" onclick="window._gambDeskTab=this.dataset.dtab;renderDesglose()" style="flex:1;padding:8px 4px;border-radius:8px;border:2px solid '+(sel?'var(--purple)':'var(--brd)')+';background:'+(sel?'rgba(139,92,246,.15)':'var(--s2)')+';color:'+(sel?'#c084fc':'var(--t2)')+';font-size:12px;font-weight:700;cursor:pointer">'+label+'</button>';
+    }).join('')
+    +'</div>';
+
+  if(tab==='partidos'){
+    const hist=resultados.historialDesgloses||[];
+    if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Sin resultados metidos todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
+      var filasHtml=d.filas.length
+        ?d.filas.map(function(f){
+          return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
+            +'<span>'+f.jugador+'</span>'
+            +'<span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span>'
+            +'</div>'
+            +'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>';
+        }).join('')
+        :'<div style="font-size:12px;color:var(--t3);padding:8px">Nadie se llevó puntos en este partido</div>';
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">'+d.local+' '+d.marcador+' '+d.visit+'</div>'
+        +'<div style="margin-top:8px">'+filasHtml+'</div>'
+        +'</div>';
+    }).join('');
+  } else if(tab==='bracket'){
+    const hist=resultados.historialBracketRondas||[];
+    if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Ninguna ronda de bracket cerrada todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
+      var filasHtml=d.filas.map(function(f){
+        return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
+          +'<span>'+f.jugador+'</span><span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span></div>';
+      }).join('');
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">🗂️ '+d.ronda+'</div>'
+        +'<div style="margin-top:8px">'+filasHtml+'</div>'
+        +'</div>';
+    }).join('');
+  } else if(tab==='retos'){
+    // Mostrar retos cuyo plazo ya pasó (cerrado o deadline vencido) — el plazo de
+    // RESPUESTA, no necesariamente ya validados por el admin (r.resuelto).
+    const retosCerrados=(retos||[]).filter(r=>r.cerrado||(r.deadline&&new Date()>new Date(r.deadline)));
+    if(!retosCerrados.length){ el.innerHTML=tabsHtml+'<div class="empty">Ningún reto con el plazo cerrado todavía</div>'; return; }
+    el.innerHTML=tabsHtml+[...retosCerrados].reverse().map(function(r){
+      var respuestasHtml=Object.keys(players).map(function(n){
+        const p=pronosticos[n]||{};
+        const resp=p.retos?.[r.id];
+        const acerto=r.resuelto&&r.ganadores&&r.ganadores[n];
+        if(!resp) return '<div style="font-size:11px;color:var(--t3);padding:3px 8px">'+n+': sin responder</div>';
+        var icon=!r.resuelto?'⏳':(acerto?'✅':'❌');
+        var color=!r.resuelto?'var(--t2)':(acerto?'#4ade80':'#f87171');
+        return '<div style="font-size:11px;color:'+color+';padding:3px 8px">'+icon+' '+n+': '+resp+'</div>';
+      }).join('');
+      var estadoLabel=r.resuelto?'✓ Resuelto':'⏳ Cerrado, pendiente de validar';
+      return '<div class="aviso-card" style="margin-bottom:12px">'
+        +'<div style="font-size:14px;font-weight:800;margin-bottom:2px">🎯 '+r.titulo+' <span style="font-size:11px;color:var(--gold)">+'+r.pts+'pts</span></div>'
+        +'<div style="font-size:10px;color:var(--t3);margin-bottom:6px">'+estadoLabel+'</div>'
+        +respuestasHtml
+        +'</div>';
+    }).join('');
+  }
 }
 
 // ═══ RENDER: NORMAS ═══════════════════════════════════
@@ -7991,14 +8259,33 @@ async function guardarHistorialRanking(){
 
 window.guardarGrupos=async function(){
   const p={...partidos};
+  const nuevosResultados=[]; // partidos que pasan de sin-resultado a con-resultado en este guardado
   GROUP_MATCHES.forEach(m=>{
     const gl=document.getElementById('gm-'+m.id+'-gl');
     const gv=document.getElementById('gm-'+m.id+'-gv');
-    if(gl&&gl.value!==''&&gv&&gv.value!=='') p[m.id]={gl:Number(gl.value),gv:Number(gv.value)};
+    if(gl&&gl.value!==''&&gv&&gv.value!==''){
+      const yaTenia=partidos[m.id]?.gl!=null;
+      p[m.id]={gl:Number(gl.value),gv:Number(gv.value)};
+      if(!yaTenia) nuevosResultados.push({id:m.id,local:m.local,visit:m.visit,gl:gl.value,gv:gv.value});
+    }
   });
   await setDoc(doc(db,'meta','partidos'),p);
+  partidos=p; // actualizar memoria local inmediatamente (no esperar al onSnapshot)
+  calcPoints._cache={};
   await guardarHistorialRanking();
-  alert('✅ Grupos guardados');
+  // Generar desglose del último partido nuevo con resultado (si hay varios, el último de la lista)
+  if(nuevosResultados.length){
+    const ultimo=nuevosResultados[nuevosResultados.length-1];
+    const desglose=generarDesglosePartido(ultimo.id,false,ultimo.local,ultimo.visit,ultimo.gl+'-'+ultimo.gv);
+    const res=JSON.parse(JSON.stringify(resultados));
+    if(!res.historialDesgloses) res.historialDesgloses=[];
+    res.historialDesgloses.push(desglose);
+    if(res.historialDesgloses.length>100) res.historialDesgloses=res.historialDesgloses.slice(-100);
+    await setDoc(doc(db,'meta','resultados'),res);
+    resultados=res;
+  }
+  showToast('✅ Grupos guardados');
+  renderAdmin();
 };
 
 window.guardarKO=async function(){
@@ -8006,6 +8293,7 @@ window.guardarKO=async function(){
   const res=JSON.parse(JSON.stringify(resultados));
   if(!res.koNames) res.koNames={};
   let errorValidacion=null;
+  const nuevosResultados=[]; // partidos KO que pasan de sin-resultado a con-resultado
   getAllBracket().forEach(m=>{
     const k=m.id;
     const local=document.getElementById('ko-'+k+'-local')?.value.trim();
@@ -8023,9 +8311,17 @@ window.guardarKO=async function(){
       } else if(tipo==='penaltis'&&!esEmpate){
         errorValidacion=m.id+': si es penaltis, el marcador debe ser empate';
       }
+      const yaTenia=partidos['KO_'+k]?.gl!=null;
       p['KO_'+k]={gl:glNum,gv:gvNum};
       if(tipo) p['KO_'+k].tipo=tipo;
       if(gan) p['KO_'+k].ganador=gan;
+      if(!yaTenia){
+        const kn=res.koNames?.[k]||{local:local||'?',visit:visit||'?'};
+        let marcadorTxt=glNum+'-'+gvNum;
+        if(tipo==='prorroga') marcadorTxt+=' (prórroga)';
+        else if(tipo==='penaltis') marcadorTxt+=' (pen: '+(gan||'?')+')';
+        nuevosResultados.push({id:k,local:kn.local,visit:kn.visit,marcador:marcadorTxt});
+      }
     }
   });
   if(errorValidacion){
@@ -8041,6 +8337,17 @@ window.guardarKO=async function(){
   resultados=res;
   calcPoints._cache={};
   await guardarHistorialRanking(); // Actualizar caché de puntos del login
+  // Generar desglose del último partido KO nuevo con resultado
+  if(nuevosResultados.length){
+    const ultimo=nuevosResultados[nuevosResultados.length-1];
+    const desglose=generarDesglosePartido(ultimo.id,true,ultimo.local,ultimo.visit,ultimo.marcador);
+    const res2=JSON.parse(JSON.stringify(resultados));
+    if(!res2.historialDesgloses) res2.historialDesgloses=[];
+    res2.historialDesgloses.push(desglose);
+    if(res2.historialDesgloses.length>100) res2.historialDesgloses=res2.historialDesgloses.slice(-100);
+    await setDoc(doc(db,'meta','resultados'),res2);
+    resultados=res2;
+  }
   showToast('✅ Eliminatoria guardada');
   renderAdmin();
   renderRanking();
@@ -8424,6 +8731,31 @@ window.resetPw=async function(name){
   alert('✅ Contraseña reseteada');
 };
 
+window.entrarComo=async function(name){
+  if(!confirm('¿Entrar como "'+name+'"? Verás su vista exacta. Podrás volver a Admin con el botón que aparecerá arriba.')) return;
+  window._adminImpersonating=currentUser; // guardamos quién era el admin original (su propio nombre de jugador)
+  window._wasAdmin=isAdmin;
+  isAdmin=false; // se oculta el menú admin mientras impersonas, para evitar confusión
+  await doLogin(name);
+  go('ranking');
+  const banner=document.getElementById('impersonate-banner');
+  if(banner) banner.style.display='flex';
+  showToast('👤 Ahora ves la app como '+name);
+};
+
+window.volverAAdmin=async function(){
+  const original=window._adminImpersonating;
+  isAdmin=window._wasAdmin||true;
+  window._adminImpersonating=null;
+  const banner=document.getElementById('impersonate-banner');
+  if(banner) banner.style.display='none';
+  if(original&&players[original]){
+    await doLogin(original);
+  }
+  go('admin');
+  showToast('✅ Has vuelto a tu cuenta de admin');
+};
+
 window.eliminarJugador=async function(name){
   if(!confirm('¿Eliminar a '+name+'?')) return;
   await setDoc(doc(db,'players',name),{deleted:true});
@@ -8540,16 +8872,24 @@ function renderJugadores(){
 function renderAvisoRanking(){
   const el=document.getElementById('aviso-ranking');
   if(!el) return;
-  const avisos=resultados.avisos||[];
-  if(!avisos.length){el.innerHTML='';return;}
-  const last=avisos[avisos.length-1];
-  el.innerHTML=`<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start">
-    <span style="font-size:18px;flex-shrink:0">📢</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:11px;color:var(--t3);margin-bottom:2px">${fmtDate(last.fecha)}</div>
-      <div style="font-size:13px;color:var(--t1);font-weight:600">${last.msg}</div>
-    </div>
-  </div>`;
+  const hist=resultados.historialDesgloses||[];
+  if(!hist.length){el.innerHTML='';return;}
+  const last=hist[hist.length-1];
+  const filasHtml=last.filas.length
+    ?last.filas.map(function(f){
+      return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">'
+        +'<span style="color:var(--t2)">'+f.jugador+'</span>'
+        +'<span style="color:#4ade80;font-weight:700">+'+f.pts+'</span></div>';
+    }).join('')
+    :'<div style="font-size:11px;color:var(--t3)">Nadie se llevó puntos en este partido</div>';
+  el.innerHTML='<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<span style="font-size:11px;color:var(--t3)">📊 Último resultado · '+fmtDate(last.fecha)+'</span>'
+    +'<button onclick="go(\'avisos\')" style="font-size:10px;color:var(--purple);background:none;border:none;cursor:pointer;text-decoration:underline">Ver historial</button>'
+    +'</div>'
+    +'<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:8px">'+last.local+' '+last.marcador+' '+last.visit+'</div>'
+    +filasHtml
+    +'</div>';
 }
 
 // ═══ PARTIDO DEL DÍA ════════════════════════════════════════════════════
@@ -8600,6 +8940,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
+  {id:'avisos',          icon:'📊', label:'Desglose partidos'},
   {id:'stats',           icon:'🎰', label:'Gambling', hidden:!GAMBLING_ENABLED},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
@@ -8653,10 +8994,7 @@ window.go=function(tab){
   else if(tab==='retos') renderRetos();
   else if(tab==='stats') renderStats();
   else if(tab==='avisos'){
-    renderAvisos();
-    // Mark avisos as read
-    if(currentUser) localStorage.setItem('avisos_read_'+currentUser, (resultados.avisos||[]).length);
-    const b=document.getElementById('badge-avisos'); if(b) b.style.display='none';
+    renderDesglose();
   }
   else if(tab==='normas') renderNormas();
   else if(tab==='perfil') renderPerfil();
@@ -8999,7 +9337,7 @@ loadPlayers().then(()=>clearTimeout(_loadTimeout)).catch(e=>{
 });
 // Make all module functions globally accessible
 const _fns = {
-  go, logout, closeModal, showOnboarding, obNav, renderPronosticos,
+  go, logout, closeModal, showOnboarding, obNav, renderPronosticos, renderDesglose,
   startLogin: window.startLogin, loginConPw: window.loginConPw,
   cancelPw: window.cancelPw, registrar: window.registrar, checkAdmin: window.checkAdmin,
   guardarPronosticos: window.guardarPronosticos, guardarBracket: window.guardarBracket,
