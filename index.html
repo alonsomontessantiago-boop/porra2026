@@ -7900,9 +7900,11 @@ function generarDesglosePartido(matchId, esKO, localL, visitL, marcadorReal){
 
 window._gambDeskTab=window._gambDeskTab||'partidos'; // sub-pestaña activa en Desglose
 
+
 function renderDesglose(){
   const el=document.getElementById('avisos-content');
   if(!el) return;
+  try {
   const tab=window._gambDeskTab||'partidos';
 
   const tabsHtml='<div style="display:flex;gap:6px;margin-bottom:14px">'
@@ -7947,8 +7949,6 @@ function renderDesglose(){
         +'</div>';
     }).join('');
   } else if(tab==='retos'){
-    // Mostrar retos cuyo plazo ya pasó (cerrado o deadline vencido) — el plazo de
-    // RESPUESTA, no necesariamente ya validados por el admin (r.resuelto).
     const retosCerrados=(retos||[]).filter(r=>r.cerrado||(r.deadline&&new Date()>new Date(r.deadline)));
     if(!retosCerrados.length){ el.innerHTML=tabsHtml+'<div class="empty">Ningún reto con el plazo cerrado todavía</div>'; return; }
     el.innerHTML=tabsHtml+[...retosCerrados].reverse().map(function(r){
@@ -7969,7 +7969,11 @@ function renderDesglose(){
         +'</div>';
     }).join('');
   }
+  } catch(err) {
+    el.innerHTML='<div style="background:rgba(248,113,113,.1);border:1px solid #f87171;border-radius:8px;padding:14px;color:#f87171;font-size:12px;font-family:monospace;white-space:pre-wrap">⚠️ Error en Desglose:\n'+(err.message||err)+'\n\n'+(err.stack||'')+'</div>';
+  }
 }
+
 
 // ═══ RENDER: NORMAS ═══════════════════════════════════
 function renderNormas(){
