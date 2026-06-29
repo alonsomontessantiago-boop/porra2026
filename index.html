@@ -3912,6 +3912,10 @@ function renderDesglose(){
     const fasePorMatchId={};
     GROUP_MATCHES.forEach(m=>{fasePorMatchId[m.id]='GRUPOS';});
     getAllBracket().forEach(m=>{fasePorMatchId[m.id]=m.phase;});
+    // DEBUG TEMPORAL VISUAL: mostrar matchId real de cada entrada de hist que
+    // NO sea de grupos (para detectar por qué no se reconoce como R32/etc).
+    const debugNoGrupos=hist.filter(d=>!d.esKO===false&&d.esKO).map(d=>'matchId="'+d.matchId+'" → fase detectada="'+(fasePorMatchId[d.matchId]||'SIN_MATCH')+'"');
+    const debugHtml=debugNoGrupos.length?('<div style="background:rgba(96,165,250,.1);border:1px solid #60a5fa;border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px;color:#60a5fa;font-family:monospace">DEBUG KO entries:<br>'+debugNoGrupos.join('<br>')+'</div>'):'';
     const ORDEN_FASES=['FINAL','3RD','SF','QF','R16','R32','GRUPOS'];
     const grupos={};
     ORDEN_FASES.forEach(f=>{grupos[f]=[];});
@@ -3929,7 +3933,7 @@ function renderDesglose(){
     const fechaPorIdDesglose={};
     GROUP_MATCHES.forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
     getAllBracket().forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
-    el.innerHTML=tabsHtml+histOrdenado.map(function(d){
+    el.innerHTML=tabsHtml+debugHtml+histOrdenado.map(function(d){
       var filasHtml=d.filas.length
         ?d.filas.map(function(f){
           return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
