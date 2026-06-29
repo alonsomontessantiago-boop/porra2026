@@ -3910,7 +3910,16 @@ function renderDesglose(){
     const fechaPorIdDesglose={};
     GROUP_MATCHES.forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
     getAllBracket().forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
-    const histOrdenado=[...hist].sort((a,b)=>(fechaPorIdDesglose[b.matchId]||b.fecha||'').localeCompare(fechaPorIdDesglose[a.matchId]||a.fecha||''));
+    // Orden ASCENDENTE por fecha real (más antiguo primero), luego invertido
+    // explícitamente con reverse() para que el más reciente quede arriba.
+    // (Usar a.localeCompare(b) + reverse() en vez de b.localeCompare(a) directo,
+    // para que el orden sea inequívoco y fácil de verificar.)
+    const histAscendente=[...hist].sort((a,b)=>{
+      const fechaA=fechaPorIdDesglose[a.matchId]||a.fecha||'';
+      const fechaB=fechaPorIdDesglose[b.matchId]||b.fecha||'';
+      return fechaA.localeCompare(fechaB);
+    });
+    const histOrdenado=histAscendente.reverse();
     el.innerHTML=tabsHtml+histOrdenado.map(function(d){
       var filasHtml=d.filas.length
         ?d.filas.map(function(f){
