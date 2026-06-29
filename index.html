@@ -1526,8 +1526,8 @@ function _calcPointsRaw(player){
             }
           }
         }
-        if(crucePropio) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'),m.id);
-        if(pasaPropio) add('bracket_pts','Pasa '+m.id+': '+realWinner,getPts('bracket_pasa'),m.id);
+        if(crucePropio) add('bracket_pts',realLocal+'-'+realVisit,getPts('bracket_cruce'),m.id);
+        if(pasaPropio) add('bracket_pts','Pasa '+realLocal+'-'+realVisit+': '+realWinner,getPts('bracket_pasa'),m.id);
       }
     });
   }
@@ -6204,6 +6204,9 @@ function etiquetaCorta(concepto){
   if(texto.startsWith('Quiniela')) return 'Quiniela';
   if(texto.startsWith('Pasa')) return 'Pasa de ronda';
   if(texto.startsWith('Cruce')) return 'Cruce acertado';
+  // Nuevo formato de cruce: "Equipo-Equipo" (sin prefijo "Cruce") — un guion
+  // entre dos nombres y ningún ":" (eso ya lo captura la regla de "Pasa" arriba).
+  if(/^[^:]+-[^:]+$/.test(texto)) return 'Cruce acertado';
   if(texto.includes('1º del grupo')||texto.includes('Grupo')&&texto.includes('1º')) return '1º de grupo';
   if(texto.includes('2º del grupo')||texto.includes('Grupo')&&texto.includes('2º')) return '2º de grupo';
   if(texto.includes('3º del grupo')||texto.includes('Grupo')&&texto.includes('3º')) return '3º de grupo';
