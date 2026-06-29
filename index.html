@@ -1314,8 +1314,8 @@ async function savePronostico(name,data){
 }
 
 // ═══ SCORING ════════════════════════════════════════════
-const _ptsCache={};
-const _ptsCacheKey={};
+let _ptsCache={};
+let _ptsCacheKey={};
 function calcPoints(player){
   // Cache key: contenido COMPLETO serializado, no solo su longitud.
   // FIX: usar .length como key producía colisiones (dos estados de datos
@@ -1333,6 +1333,17 @@ function calcPoints(player){
   _ptsCacheKey[player]=key;
   return result;
 }
+// FIX CRÍTICO: en 16 sitios del código se llamaba a "calcPoints._cache={}"
+// pensando que invalidaba la caché — pero calcPoints._cache es solo una
+// propiedad colgada de la función, sin relación con _ptsCache/_ptsCacheKey
+// (las variables que SÍ contienen la caché real). Esa "invalidación" nunca
+// hacía nada, y por eso cambios de código en _calcPointsRaw podían seguir
+// devolviendo resultados viejos cacheados indefinidamente. Con este getter/
+// setter, escribir calcPoints._cache={} ahora SÍ vacía la caché real.
+Object.defineProperty(calcPoints, '_cache', {
+  get(){ return _ptsCache; },
+  set(v){ _ptsCache={}; _ptsCacheKey={}; }
+});
 function _calcPointsRaw(player){
   const p=pronosticos[player]||{};
   const res=resultados||{};
