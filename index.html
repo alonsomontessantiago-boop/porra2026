@@ -1337,7 +1337,7 @@ function _calcPointsRaw(player){
   const p=pronosticos[player]||{};
   const res=resultados||{};
   const pt={total:0,clasif:0,premios:0,grupos:0,exactos:0,elim:0,bracket_pts:0,quiniela:0,gambling:0,details:[]};
-  function add(cat,label,v){ if(v>0){ pt[cat]+=v;pt.total+=v;pt.details.push({cat,label,v}); } }
+  function add(cat,label,v,matchId){ if(v>0){ pt[cat]+=v;pt.total+=v;pt.details.push({cat,label,v,matchId}); } }
 
   // Clasificación final
   if(cmp(p.campeon,res.campeon)) add('clasif','Campeón: '+p.campeon,getPts('campeon'));
@@ -1390,10 +1390,10 @@ function _calcPointsRaw(player){
     if(!pm||!rm||rm.gl==null) return;
     const exacto=Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
     // Exacto y quiniela son ACUMULABLES (máx 14 pts por partido)
-    if(exacto) add('exactos','Exacto '+m.local+'-'+m.visit+': '+pm.gl+'-'+pm.gv,getPts('exacto_grupos'));
+    if(exacto) add('exactos','Exacto '+m.local+'-'+m.visit+': '+pm.gl+'-'+pm.gv,getPts('exacto_grupos'),m.id);
     const resSign=Number(rm.gl)>Number(rm.gv)?'1':Number(rm.gl)===Number(rm.gv)?'X':'2';
     const proSign=Number(pm.gl)>Number(pm.gv)?'1':Number(pm.gl)===Number(pm.gv)?'X':'2';
-    if(resSign===proSign) add('quiniela','Quiniela '+m.local+'-'+m.visit+': '+proSign,getPts('quiniela'));
+    if(resSign===proSign) add('quiniela','Quiniela '+m.local+'-'+m.visit+': '+proSign,getPts('quiniela'),m.id);
   });
 
   // KO exactos + quién pasa (ronda a ronda pronos)
@@ -1463,7 +1463,7 @@ function _calcPointsRaw(player){
         }
       }
 
-      if(pts>0) add(cat, label, pts);
+      if(pts>0) add(cat, label, pts, m.id);
     });
   });
 ;
@@ -1526,8 +1526,8 @@ function _calcPointsRaw(player){
             }
           }
         }
-        if(crucePropio) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'));
-        if(pasaPropio) add('bracket_pts','Pasa '+m.id+': '+realWinner,getPts('bracket_pasa'));
+        if(crucePropio) add('bracket_pts','Cruce '+m.id,getPts('bracket_cruce'),m.id);
+        if(pasaPropio) add('bracket_pts','Pasa '+m.id+': '+realWinner,getPts('bracket_pasa'),m.id);
       }
     });
   }
@@ -3835,9 +3835,10 @@ function renderStats(){
 function generarDesglosePartido(matchId, esKO, localL, visitL, marcadorReal){
   const filas=[];
   Object.keys(players).forEach(n=>{
-    const before=calcPoints(n).total; // ya incluye este resultado porque se llama DESPUÉS de guardar
-    // Recalculamos qué aportó específicamente este partido mirando pt.details
-    const detalles=calcPoints(n).details.filter(d=>d.label && d.label.includes(matchId));
+    // FIX: comparación EXACTA por matchId (no por texto en el label). Antes
+    // buscaba el ID dentro del texto del label, lo cual nunca encontraba nada
+    // para partidos de grupos (sus labels usan nombres de equipos, no el ID).
+    const detalles=calcPoints(n).details.filter(d=>d.matchId===matchId);
     if(detalles.length){
       const total=detalles.reduce((s,d)=>s+d.v,0);
       filas.push({jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')});
@@ -4706,6 +4707,15 @@ function renderAdmin(){
       <h3>📊 Desglose partidos</h3>
       <p style="font-size:12px;color:var(--t2);margin-bottom:8px">Genera el historial de desglose de puntos para todos los partidos que ya tienen resultado pero se metieron antes de existir esta función.</p>
       <button class="btn btn-p btn-sm" onclick="generarHistorialRetroactivo()">⚡ Generar historial retroactivo</button>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--brd2)">
+        <p style="font-size:11px;color:var(--t2);margin-bottom:6px">Recalcular una ronda de bracket concreta (por si cambió algo después de generarla):</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${['R32','R16','QF','SF'].map(faseId=>{
+            const label={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'}[faseId];
+            return '<button class="btn-xs btn-s" onclick="recalcularRondaBracket(\''+faseId+'\')">🔄 '+label+'</button>';
+          }).join('')}
+        </div>
+      </div>
     </div>
     <div class="admin-section danger-zone">
       <h3>Zona peligrosa</h3>
@@ -5115,17 +5125,21 @@ window.guardarKO=async function(){
     await setDoc(doc(db,'meta','resultados'),res2);
     resultados=res2;
   }
-  // Detectar si alguna ronda de BRACKET acaba de quedar completa (todos sus
-  // partidos con ganador real) y aún no se ha generado su desglose.
+  // Detectar si alguna ronda de BRACKET acaba de quedar con TODOS sus cruces
+  // confirmados (koNames completo) — no hace falta esperar a que se jueguen
+  // los partidos, ya que el cruce (+15) puntúa solo con los equipos conocidos.
   const RONDAS_DESGLOSE={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'};
   for(const [faseId,faseLabel] of Object.entries(RONDAS_DESGLOSE)){
     const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
     if(!idsRonda.length) continue;
-    const todosConGanador=idsRonda.every(id=>partidos['KO_'+id]?.ganador);
+    const todosConfirmados=idsRonda.every(id=>{
+      const kn=resultados.koNames?.[id]||{};
+      return kn.local&&kn.visit;
+    });
     const yaGenerado=(resultados.historialBracketRondas||[]).some(d=>d.ronda===faseLabel);
-    if(todosConGanador&&!yaGenerado){
+    if(todosConfirmados&&!yaGenerado){
       const filas=Object.keys(players).map(n=>{
-        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.some(id=>d.label&&d.label.includes(id)));
+        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
         const total=detalles.reduce((s,d)=>s+d.v,0);
         return {jugador:n,pts:total};
       }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
@@ -5510,6 +5524,32 @@ window.exportarDatos=function(){
   a.click();
 };
 
+window.recalcularRondaBracket=async function(faseId){
+  const label={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'}[faseId];
+  if(!confirm('¿Recalcular el desglose de "'+label+'"? Sustituirá el desglose existente de esta ronda si ya había uno.')) return;
+  calcPoints._cache={};
+  const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
+  const todosConfirmados=idsRonda.every(id=>{
+    const kn=resultados.koNames?.[id]||{};
+    return kn.local&&kn.visit;
+  });
+  if(!todosConfirmados){ alert('⚠️ Todavía no están confirmados todos los cruces de '+label+'. Completa "Equipo local/visitante real" de los '+idsRonda.length+' partidos primero.'); return; }
+  const filas=Object.keys(players).map(n=>{
+    const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
+    const total=detalles.reduce((s,d)=>s+d.v,0);
+    return {jugador:n,pts:total};
+  }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
+  const res=JSON.parse(JSON.stringify(resultados));
+  if(!res.historialBracketRondas) res.historialBracketRondas=[];
+  // Quitar cualquier entrada previa de esta misma ronda antes de añadir la nueva
+  res.historialBracketRondas=res.historialBracketRondas.filter(d=>d.ronda!==label);
+  res.historialBracketRondas.push({ronda:label,fecha:new Date().toISOString(),filas});
+  await setDoc(doc(db,'meta','resultados'),res);
+  resultados=res;
+  showToast('✅ Recalculado: '+label+' ('+filas.length+' jugadores con puntos)');
+  renderAdmin();
+};
+
 window.generarHistorialRetroactivo=async function(){
   if(!confirm('¿Generar el historial de desglose para TODOS los partidos que ya tienen resultado? Esto puede tardar unos segundos.')) return;
   calcPoints._cache={}; // forzar recálculo fresco para todos
@@ -5544,15 +5584,19 @@ window.generarHistorialRetroactivo=async function(){
   getAllBracket().forEach(m=>{fechaPorId[m.id]=m.date;});
   desglosesPartidos.sort((a,b)=>(fechaPorId[a.matchId]||'').localeCompare(fechaPorId[b.matchId]||''));
 
-  // 3. Rondas de bracket ya completas
+  // 3. Rondas de bracket con TODOS sus cruces confirmados (koNames completo,
+  // sin esperar a que se jueguen los partidos)
   const RONDAS_DESGLOSE={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'};
   for(const [faseId,faseLabel] of Object.entries(RONDAS_DESGLOSE)){
     const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
     if(!idsRonda.length) continue;
-    const todosConGanador=idsRonda.every(id=>partidos['KO_'+id]?.ganador);
-    if(todosConGanador){
+    const todosConfirmados=idsRonda.every(id=>{
+      const kn=resultados.koNames?.[id]||{};
+      return kn.local&&kn.visit;
+    });
+    if(todosConfirmados){
       const filas=Object.keys(players).map(n=>{
-        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.some(id=>d.label&&d.label.includes(id)));
+        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
         const total=detalles.reduce((s,d)=>s+d.v,0);
         return {jugador:n,pts:total};
       }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
@@ -6120,6 +6164,28 @@ function renderEvolucion(){
     </div>`;
 }
 
+// Reduce un concepto largo (ej: "Exacto KO M73: 1-0 (+25)") a una etiqueta
+// corta para mostrar en la card compacta del ranking (ej: "Exacto").
+function etiquetaCorta(concepto){
+  const texto=concepto.split(' (+')[0]; // quitar el "(+pts)" final
+  if(texto.startsWith('Exacto')) return texto.includes('penaltis')?'Exacto (penaltis)':texto.includes('prórroga')?'Exacto (prórroga)':'Exacto';
+  if(texto.startsWith('Quiniela')) return 'Quiniela';
+  if(texto.startsWith('Pasa')) return 'Pasa de ronda';
+  if(texto.startsWith('Cruce')) return 'Cruce acertado';
+  if(texto.includes('1º del grupo')||texto.includes('Grupo')&&texto.includes('1º')) return '1º de grupo';
+  if(texto.includes('2º del grupo')||texto.includes('Grupo')&&texto.includes('2º')) return '2º de grupo';
+  if(texto.includes('3º del grupo')||texto.includes('Grupo')&&texto.includes('3º')) return '3º de grupo';
+  if(texto.includes('4º del grupo')||texto.includes('Grupo')&&texto.includes('4º')) return '4º de grupo';
+  if(texto.startsWith('Marcador exacto pero falla')) return 'Marcador exacto (falla 90/prórroga)';
+  if(texto.startsWith('Penaltis')) return texto.includes('ganador fallado')?'Penaltis (ganador fallado)':'Penaltis (acierta ganador)';
+  if(texto.startsWith('Empate exacto')) return 'Empate exacto (sin marcar penaltis)';
+  if(texto.startsWith('Final ganador')) return 'Ganador de la Final';
+  if(texto.startsWith('Subcampeón')) return 'Subcampeón';
+  if(texto.startsWith('3er puesto')) return '3er puesto';
+  if(texto.startsWith('4º puesto')) return '4º puesto';
+  return texto.split(':')[0]; // fallback: la primera palabra antes de ":"
+}
+
 function renderAvisoRanking(){
   const el=document.getElementById('aviso-ranking');
   if(!el) return;
@@ -6128,9 +6194,12 @@ function renderAvisoRanking(){
   const last=hist[hist.length-1];
   const filasHtml=last.filas.length
     ?last.filas.map(function(f){
-      return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px">'
+      const motivos=(f.conceptos||[]).map(etiquetaCorta).join(' + ');
+      return '<div style="padding:3px 0;font-size:11px">'
+        +'<div style="display:flex;justify-content:space-between">'
         +'<span style="color:var(--t2)">'+f.jugador+'</span>'
-        +'<span style="color:#4ade80;font-weight:700">+'+f.pts+'</span></div>';
+        +'<span style="color:#4ade80;font-weight:700">+'+f.pts+'</span></div>'
+        +'<div style="font-size:9px;color:var(--t3)">'+motivos+'</div></div>';
     }).join('')
     :'<div style="font-size:11px;color:var(--t3)">Nadie se llevó puntos en este partido</div>';
   el.innerHTML='<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
