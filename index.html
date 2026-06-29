@@ -468,7 +468,7 @@ window.addEventListener('load', function(){
 
 <!-- DESGLOSE PARTIDOS (sustituye avisos) -->
 <div id="avisos-page" class="page">
-  <div class="sec">📊 Desglose partidos</div>
+  <div class="sec">📊 Desglose</div>
   <div id="avisos-content"></div>
 </div>
 
@@ -2817,6 +2817,28 @@ function renderRetos(){
       }
     }
 
+    // Respuestas de los DEMÁS jugadores, visibles solo tras el deadline/cierre.
+    // No incluye la propia respuesta del usuario (ya destacada arriba en myAnswerHtml).
+    let otrosHtml='';
+    if(cerrado){
+      const otrosNombres=Object.keys(players).filter(n=>n!==currentUser);
+      if(otrosNombres.length){
+        const filasOtros=otrosNombres.map(n=>{
+          const p2=pronosticos[n]||{};
+          const resp=p2.retos?.[r.id];
+          const acerto=r.resuelto&&r.ganadores&&r.ganadores[n];
+          if(!resp) return `<div style="font-size:11px;color:var(--t3);padding:2px 0">${n}: sin responder</div>`;
+          const icon=!r.resuelto?'⏳':(acerto?'✅':'❌');
+          const color=!r.resuelto?'var(--t2)':(acerto?'#4ade80':'#f87171');
+          return `<div style="font-size:11px;color:${color};padding:2px 0">${icon} ${n}: ${resp}</div>`;
+        }).join('');
+        otrosHtml=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--brd2)">
+          <div style="font-size:10px;color:var(--t3);margin-bottom:4px">Respuestas de todos:</div>
+          ${filasOtros}
+        </div>`;
+      }
+    }
+
     const borderColor=haGanado?'var(--goldd)':perdido?'rgba(232,50,50,.4)':cerrado?'var(--brd2)':'var(--purple)';
     const bgColor=haGanado?'rgba(232,168,32,.05)':perdido?'rgba(232,50,50,.05)':'var(--s1)';
     return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s">
@@ -2834,6 +2856,7 @@ function renderRetos(){
       ${deadlineHtml}
       ${myAnswerHtml}
       ${inputHtml}
+      ${otrosHtml}
     </div>`;
   }).join('');
 }
@@ -3871,7 +3894,13 @@ function renderDesglose(){
   if(tab==='partidos'){
     const hist=resultados.historialDesgloses||[];
     if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Sin resultados metidos todavía</div>'; return; }
-    el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
+    // Orden CRONOLÓGICO REAL por fecha del partido en el calendario del Mundial
+    // (no por el orden en que el admin metió los resultados).
+    const fechaPorIdDesglose={};
+    GROUP_MATCHES.forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
+    getAllBracket().forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
+    const histOrdenado=[...hist].sort((a,b)=>(fechaPorIdDesglose[b.matchId]||b.fecha||'').localeCompare(fechaPorIdDesglose[a.matchId]||a.fecha||''));
+    el.innerHTML=tabsHtml+histOrdenado.map(function(d){
       var filasHtml=d.filas.length
         ?d.filas.map(function(f){
           return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
@@ -3881,8 +3910,9 @@ function renderDesglose(){
             +'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>';
         }).join('')
         :'<div style="font-size:12px;color:var(--t3);padding:8px">Nadie se llevó puntos en este partido</div>';
+      var fechaMostrada=fechaPorIdDesglose[d.matchId]||d.fecha;
       return '<div class="aviso-card" style="margin-bottom:12px">'
-        +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
+        +'<div class="aviso-date">'+fmtDate(fechaMostrada)+'</div>'
         +'<div style="font-size:14px;font-weight:800;margin-bottom:4px">'+d.local+' '+d.marcador+' '+d.visit+'</div>'
         +'<div style="margin-top:8px">'+filasHtml+'</div>'
         +'</div>';
@@ -3892,8 +3922,10 @@ function renderDesglose(){
     if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Ninguna ronda de bracket cerrada todavía</div>'; return; }
     el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
       var filasHtml=d.filas.map(function(f){
+        var conceptosHtml=(f.conceptos&&f.conceptos.length)?'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>':'';
         return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
-          +'<span>'+f.jugador+'</span><span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span></div>';
+          +'<span>'+f.jugador+'</span><span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span></div>'
+          +conceptosHtml;
       }).join('');
       return '<div class="aviso-card" style="margin-bottom:12px">'
         +'<div class="aviso-date">'+fmtDate(d.fecha)+'</div>'
@@ -5141,7 +5173,7 @@ window.guardarKO=async function(){
       const filas=Object.keys(players).map(n=>{
         const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
         const total=detalles.reduce((s,d)=>s+d.v,0);
-        return {jugador:n,pts:total};
+        return {jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')};
       }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
       const res3=JSON.parse(JSON.stringify(resultados));
       if(!res3.historialBracketRondas) res3.historialBracketRondas=[];
@@ -5537,7 +5569,7 @@ window.recalcularRondaBracket=async function(faseId){
   const filas=Object.keys(players).map(n=>{
     const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
     const total=detalles.reduce((s,d)=>s+d.v,0);
-    return {jugador:n,pts:total};
+    return {jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')};
   }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
   const res=JSON.parse(JSON.stringify(resultados));
   if(!res.historialBracketRondas) res.historialBracketRondas=[];
@@ -5598,7 +5630,7 @@ window.generarHistorialRetroactivo=async function(){
       const filas=Object.keys(players).map(n=>{
         const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.includes(d.matchId));
         const total=detalles.reduce((s,d)=>s+d.v,0);
-        return {jugador:n,pts:total};
+        return {jugador:n, pts:total, conceptos:detalles.map(d=>d.label+' (+'+d.v+')')};
       }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
       desglosesBracket.push({ronda:faseLabel,fecha:new Date().toISOString(),filas});
     }
@@ -6192,14 +6224,26 @@ function renderAvisoRanking(){
   const hist=resultados.historialDesgloses||[];
   if(!hist.length){el.innerHTML='';return;}
   const last=hist[hist.length-1];
-  const filasHtml=last.filas.length
-    ?last.filas.map(function(f){
-      const motivos=(f.conceptos||[]).map(etiquetaCorta).join(' + ');
-      return '<div style="padding:3px 0;font-size:11px">'
-        +'<div style="display:flex;justify-content:space-between">'
-        +'<span style="color:var(--t2)">'+f.jugador+'</span>'
-        +'<span style="color:#4ade80;font-weight:700">+'+f.pts+'</span></div>'
-        +'<div style="font-size:9px;color:var(--t3)">'+motivos+'</div></div>';
+  // Agrupar por MOTIVO en vez de por jugador, para que la card quede compacta
+  // aunque haya muchos jugadores compartiendo el mismo concepto (ej: "Pasa de
+  // ronda" lo aciertan casi todos a la vez).
+  const grupos={}; // {motivo: [{jugador,pts}]}
+  last.filas.forEach(function(f){
+    (f.conceptos||[]).forEach(function(c){
+      const motivo=etiquetaCorta(c);
+      const ptsMatch=c.match(/\(\+(\d+)\)/);
+      const pts=ptsMatch?Number(ptsMatch[1]):0;
+      if(!grupos[motivo]) grupos[motivo]=[];
+      grupos[motivo].push({jugador:f.jugador,pts});
+    });
+  });
+  const motivosOrdenados=Object.keys(grupos).sort((a,b)=>grupos[b].length-grupos[a].length);
+  const filasHtml=motivosOrdenados.length
+    ?motivosOrdenados.map(function(motivo){
+      const jugadoresTxt=grupos[motivo].map(function(j){return j.jugador+' (+'+j.pts+')';}).join(', ');
+      return '<div style="padding:4px 0;font-size:11px">'
+        +'<div style="color:var(--gold);font-weight:700">'+motivo+'</div>'
+        +'<div style="font-size:10px;color:var(--t2)">'+jugadoresTxt+'</div></div>';
     }).join('')
     :'<div style="font-size:11px;color:var(--t3)">Nadie se llevó puntos en este partido</div>';
   el.innerHTML='<div style="background:linear-gradient(135deg,rgba(139,47,201,.15),rgba(232,98,26,.1));border:1px solid rgba(139,47,201,.3);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
@@ -6266,7 +6310,7 @@ const NAV_TABS = [
   {id:'partidos',        icon:'⚽', label:'Partidos'},
   {id:'jugadores',       icon:'👥', label:'Jugadores'},
   {id:'retos',           icon:'🎯', label:'Retos'},
-  {id:'avisos',          icon:'📊', label:'Desglose partidos'},
+  {id:'avisos',          icon:'📊', label:'Desglose'},
   {id:'stats',           icon:'🎰', label:'Gambling', hidden:!GAMBLING_ENABLED},
   {id:'comparador',      icon:'🔀', label:'Comparar'},
   {id:'normas',          icon:'📖', label:'Normas'},
