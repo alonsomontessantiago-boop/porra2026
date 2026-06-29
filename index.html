@@ -4698,6 +4698,11 @@ function renderAdmin(){
     <div class="admin-section" onclick="toggleAdminSec('sec12')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">⚠️ Penalizaciones</h3><span class="admin-sec-arrow" id="adminarrow-sec12">▼</span></div><div class="admin-sec-body" id="adminsec-sec12">
       ${penHtml}
     </div>
+    <div class="admin-section">
+      <h3>📊 Desglose partidos</h3>
+      <p style="font-size:12px;color:var(--t2);margin-bottom:8px">Genera el historial de desglose de puntos para todos los partidos que ya tienen resultado pero se metieron antes de existir esta función.</p>
+      <button class="btn btn-p btn-sm" onclick="generarHistorialRetroactivo()">⚡ Generar historial retroactivo</button>
+    </div>
     <div class="admin-section danger-zone">
       <h3>Zona peligrosa</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -5499,6 +5504,65 @@ window.exportarDatos=function(){
   const a=document.createElement('a');
   a.href=url; a.download='porra2026_backup_'+new Date().toISOString().split('T')[0]+'.json';
   a.click();
+};
+
+window.generarHistorialRetroactivo=async function(){
+  if(!confirm('¿Generar el historial de desglose para TODOS los partidos que ya tienen resultado? Esto puede tardar unos segundos.')) return;
+  calcPoints._cache={}; // forzar recálculo fresco para todos
+  const desglosesPartidos=[];
+  const desglosesBracket=[];
+
+  // 1. Partidos de GRUPOS con resultado
+  GROUP_MATCHES.forEach(m=>{
+    const rm=partidos[m.id];
+    if(rm&&rm.gl!=null){
+      const d=generarDesglosePartido(m.id,false,m.local,m.visit,rm.gl+'-'+rm.gv);
+      desglosesPartidos.push(d);
+    }
+  });
+
+  // 2. Partidos de ELIMINATORIAS con resultado
+  getAllBracket().forEach(m=>{
+    const rm=partidos['KO_'+m.id];
+    if(rm&&rm.gl!=null){
+      const kn=resultados.koNames?.[m.id]||{};
+      let marcadorTxt=rm.gl+'-'+rm.gv;
+      if(rm.tipo==='prorroga') marcadorTxt+=' (prórroga)';
+      else if(rm.tipo==='penaltis') marcadorTxt+=' (pen: '+(rm.ganador||'?')+')';
+      const d=generarDesglosePartido(m.id,true,kn.local||'?',kn.visit||'?',marcadorTxt);
+      desglosesPartidos.push(d);
+    }
+  });
+
+  // Ordenar cronológicamente por fecha real del partido cuando se pueda
+  const fechaPorId={};
+  GROUP_MATCHES.forEach(m=>{fechaPorId[m.id]=m.date;});
+  getAllBracket().forEach(m=>{fechaPorId[m.id]=m.date;});
+  desglosesPartidos.sort((a,b)=>(fechaPorId[a.matchId]||'').localeCompare(fechaPorId[b.matchId]||''));
+
+  // 3. Rondas de bracket ya completas
+  const RONDAS_DESGLOSE={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'};
+  for(const [faseId,faseLabel] of Object.entries(RONDAS_DESGLOSE)){
+    const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
+    if(!idsRonda.length) continue;
+    const todosConGanador=idsRonda.every(id=>partidos['KO_'+id]?.ganador);
+    if(todosConGanador){
+      const filas=Object.keys(players).map(n=>{
+        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.some(id=>d.label&&d.label.includes(id)));
+        const total=detalles.reduce((s,d)=>s+d.v,0);
+        return {jugador:n,pts:total};
+      }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
+      desglosesBracket.push({ronda:faseLabel,fecha:new Date().toISOString(),filas});
+    }
+  }
+
+  const res=JSON.parse(JSON.stringify(resultados));
+  res.historialDesgloses=desglosesPartidos.slice(-100);
+  res.historialBracketRondas=desglosesBracket;
+  await setDoc(doc(db,'meta','resultados'),res);
+  resultados=res;
+  showToast('✅ Historial generado: '+desglosesPartidos.length+' partidos, '+desglosesBracket.length+' rondas de bracket');
+  renderAdmin();
 };
 
 window.resetPw=async function(name){
@@ -8712,6 +8776,65 @@ window.exportarDatos=function(){
   const a=document.createElement('a');
   a.href=url; a.download='porra2026_backup_'+new Date().toISOString().split('T')[0]+'.json';
   a.click();
+};
+
+window.generarHistorialRetroactivo=async function(){
+  if(!confirm('¿Generar el historial de desglose para TODOS los partidos que ya tienen resultado? Esto puede tardar unos segundos.')) return;
+  calcPoints._cache={}; // forzar recálculo fresco para todos
+  const desglosesPartidos=[];
+  const desglosesBracket=[];
+
+  // 1. Partidos de GRUPOS con resultado
+  GROUP_MATCHES.forEach(m=>{
+    const rm=partidos[m.id];
+    if(rm&&rm.gl!=null){
+      const d=generarDesglosePartido(m.id,false,m.local,m.visit,rm.gl+'-'+rm.gv);
+      desglosesPartidos.push(d);
+    }
+  });
+
+  // 2. Partidos de ELIMINATORIAS con resultado
+  getAllBracket().forEach(m=>{
+    const rm=partidos['KO_'+m.id];
+    if(rm&&rm.gl!=null){
+      const kn=resultados.koNames?.[m.id]||{};
+      let marcadorTxt=rm.gl+'-'+rm.gv;
+      if(rm.tipo==='prorroga') marcadorTxt+=' (prórroga)';
+      else if(rm.tipo==='penaltis') marcadorTxt+=' (pen: '+(rm.ganador||'?')+')';
+      const d=generarDesglosePartido(m.id,true,kn.local||'?',kn.visit||'?',marcadorTxt);
+      desglosesPartidos.push(d);
+    }
+  });
+
+  // Ordenar cronológicamente por fecha real del partido cuando se pueda
+  const fechaPorId={};
+  GROUP_MATCHES.forEach(m=>{fechaPorId[m.id]=m.date;});
+  getAllBracket().forEach(m=>{fechaPorId[m.id]=m.date;});
+  desglosesPartidos.sort((a,b)=>(fechaPorId[a.matchId]||'').localeCompare(fechaPorId[b.matchId]||''));
+
+  // 3. Rondas de bracket ya completas
+  const RONDAS_DESGLOSE={R32:'16avos',R16:'Octavos',QF:'Cuartos',SF:'Semis'};
+  for(const [faseId,faseLabel] of Object.entries(RONDAS_DESGLOSE)){
+    const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
+    if(!idsRonda.length) continue;
+    const todosConGanador=idsRonda.every(id=>partidos['KO_'+id]?.ganador);
+    if(todosConGanador){
+      const filas=Object.keys(players).map(n=>{
+        const detalles=calcPoints(n).details.filter(d=>d.cat==='bracket_pts'&&idsRonda.some(id=>d.label&&d.label.includes(id)));
+        const total=detalles.reduce((s,d)=>s+d.v,0);
+        return {jugador:n,pts:total};
+      }).filter(f=>f.pts>0).sort((a,b)=>b.pts-a.pts);
+      desglosesBracket.push({ronda:faseLabel,fecha:new Date().toISOString(),filas});
+    }
+  }
+
+  const res=JSON.parse(JSON.stringify(resultados));
+  res.historialDesgloses=desglosesPartidos.slice(-100);
+  res.historialBracketRondas=desglosesBracket;
+  await setDoc(doc(db,'meta','resultados'),res);
+  resultados=res;
+  showToast('✅ Historial generado: '+desglosesPartidos.length+' partidos, '+desglosesBracket.length+' rondas de bracket');
+  renderAdmin();
 };
 
 window.resetPw=async function(name){
