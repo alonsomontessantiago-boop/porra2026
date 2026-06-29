@@ -3905,21 +3905,30 @@ function renderDesglose(){
   if(tab==='partidos'){
     const hist=resultados.historialDesgloses||[];
     if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Sin resultados metidos todavía</div>'; return; }
-    // Orden CRONOLÓGICO REAL por fecha del partido en el calendario del Mundial
-    // (no por el orden en que el admin metió los resultados).
+    // Agrupar por FASE: primero la eliminatoria más avanzada (Final→3er puesto→
+    // Semis→Cuartos→Octavos→16avos), y al final los partidos de grupos. Dentro
+    // de cada fase, orden por momento de inserción en historialDesgloses (más
+    // reciente = más al final del array = se muestra primero).
+    const fasePorMatchId={};
+    GROUP_MATCHES.forEach(m=>{fasePorMatchId[m.id]='GRUPOS';});
+    getAllBracket().forEach(m=>{fasePorMatchId[m.id]=m.phase;});
+    const ORDEN_FASES=['FINAL','3RD','SF','QF','R16','R32','GRUPOS'];
+    const grupos={};
+    ORDEN_FASES.forEach(f=>{grupos[f]=[];});
+    hist.forEach(d=>{
+      const fase=fasePorMatchId[d.matchId]||'GRUPOS';
+      if(!grupos[fase]) grupos[fase]=[];
+      grupos[fase].push(d);
+    });
+    // Dentro de cada fase: más reciente primero (el array original ya está en
+    // orden de inserción, así que solo invertimos cada subgrupo).
+    let histOrdenado=[];
+    ORDEN_FASES.forEach(f=>{
+      histOrdenado=histOrdenado.concat([...grupos[f]].reverse());
+    });
     const fechaPorIdDesglose={};
     GROUP_MATCHES.forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
     getAllBracket().forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
-    // Orden ASCENDENTE por fecha real (más antiguo primero), luego invertido
-    // explícitamente con reverse() para que el más reciente quede arriba.
-    // (Usar a.localeCompare(b) + reverse() en vez de b.localeCompare(a) directo,
-    // para que el orden sea inequívoco y fácil de verificar.)
-    const histAscendente=[...hist].sort((a,b)=>{
-      const fechaA=fechaPorIdDesglose[a.matchId]||a.fecha||'';
-      const fechaB=fechaPorIdDesglose[b.matchId]||b.fecha||'';
-      return fechaA.localeCompare(fechaB);
-    });
-    const histOrdenado=histAscendente.reverse();
     el.innerHTML=tabsHtml+histOrdenado.map(function(d){
       var filasHtml=d.filas.length
         ?d.filas.map(function(f){
