@@ -1430,47 +1430,39 @@ function _calcPointsRaw(player){
       const hayPenaltisProno=pmTipo==='penaltis';
       const aciertaGanadorPasa=rmGanador&&cmp(pm.pasa,rmGanador);
 
+      // Nombres reales del partido (para labels legibles en el desglose)
+      const kn=resultados.koNames?.[m.id]||{};
+      const nombrePartido=(kn.local&&kn.visit)?(kn.local+'-'+kn.visit):m.id;
       let pts=0, label='', cat='elim';
 
       if(!hayPenaltisReal){
-        // No penalties in real match (fue 90min o prórroga)
         if(exactoMarcador&&tipoCoincide){
-          // Marcador exacto Y acierta si fue 90min/prórroga → +25 completo
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto KO '+k+': '+pmGl+'-'+pmGv;
+          label='Exacto '+nombrePartido+': '+pmGl+'-'+pmGv;
         } else if(exactoMarcador&&!tipoCoincide){
-          // Marcador exacto pero falla 90min↔prórroga → +10 (penalización parcial, nuevo)
           pts=getPts('exacto_ko_pen');
-          label='Marcador exacto pero falla 90min/prórroga '+k;
+          label='Marcador exacto pero falla 90min/prórroga '+nombrePartido;
         } else if(aciertaGanadorPasa){
-          // Solo acierta quién pasa → +5
           pts=getPts('pasa_ronda');
-          label='Pasa '+k+': '+pm.pasa;
+          label='Pasa '+nombrePartido+': '+pm.pasa;
         }
       } else {
-        // Real match went to penalties (score in 90+extra was a draw).
-        // El ganador de penaltis se compara via el campo "pasa", no via texto libre.
         const aciertaGanadorPenaltis=hayPenaltisProno&&rmGanador&&cmp(pm.pasa,rmGanador);
         if(hayPenaltisProno && exactoMarcador && aciertaGanadorPenaltis){
-          // Predijo penaltis, empate exacto Y ganador correcto → +25 completo
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto penaltis '+k+': '+pm.pasa;
+          label='Exacto penaltis '+nombrePartido+': '+pm.pasa;
         } else if(hayPenaltisProno && !exactoMarcador && aciertaGanadorPenaltis){
-          // Predijo penaltis y acierta ganador, pero falla el marcador exacto del empate → +10 (nuevo)
           pts=getPts('exacto_ko_pen');
-          label='Penaltis (acierta ganador, falla marcador) '+k;
+          label='Penaltis (acierta ganador, falla marcador) '+nombrePartido;
         } else if(hayPenaltisProno && exactoMarcador && rmGanador && !cmp(pm.pasa,rmGanador)){
-          // Predijo penaltis, empate exacto, pero falla el ganador de la tanda → +10
           pts=getPts('exacto_ko_pen');
-          label='Penaltis (ganador fallado) '+k;
+          label='Penaltis (ganador fallado) '+nombrePartido;
         } else if(exactoMarcador&&!hayPenaltisProno){
-          // Acertó el marcador de empate pero no marcó "penaltis" → +10 (falla el tipo)
           pts=getPts('exacto_ko_pen');
-          label='Empate exacto pero no marcó penaltis '+k;
+          label='Empate exacto pero no marcó penaltis '+nombrePartido;
         } else if(aciertaGanadorPasa){
-          // Solo acierta quién pasa → +5
           pts=getPts('pasa_ronda');
-          label='Pasa '+k+': '+pm.pasa;
+          label='Pasa '+nombrePartido+': '+pm.pasa;
         }
       }
 
@@ -3912,10 +3904,7 @@ function renderDesglose(){
     const fasePorMatchId={};
     GROUP_MATCHES.forEach(m=>{fasePorMatchId[m.id]='GRUPOS';});
     getAllBracket().forEach(m=>{fasePorMatchId[m.id]=m.phase;});
-    // DEBUG TEMPORAL VISUAL: mostrar matchId real de cada entrada de hist que
-    // NO sea de grupos (para detectar por qué no se reconoce como R32/etc).
-    const debugNoGrupos=hist.filter(d=>!d.esKO===false&&d.esKO).map(d=>'matchId="'+d.matchId+'" → fase detectada="'+(fasePorMatchId[d.matchId]||'SIN_MATCH')+'"');
-    const debugHtml=debugNoGrupos.length?('<div style="background:rgba(96,165,250,.1);border:1px solid #60a5fa;border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px;color:#60a5fa;font-family:monospace">DEBUG KO entries:<br>'+debugNoGrupos.join('<br>')+'</div>'):'';
+
     const ORDEN_FASES=['FINAL','3RD','SF','QF','R16','R32','GRUPOS'];
     const grupos={};
     ORDEN_FASES.forEach(f=>{grupos[f]=[];});
@@ -3933,7 +3922,7 @@ function renderDesglose(){
     const fechaPorIdDesglose={};
     GROUP_MATCHES.forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
     getAllBracket().forEach(m=>{fechaPorIdDesglose[m.id]=m.date;});
-    el.innerHTML=tabsHtml+debugHtml+histOrdenado.map(function(d){
+    el.innerHTML=tabsHtml+histOrdenado.map(function(d){
       var filasHtml=d.filas.length
         ?d.filas.map(function(f){
           return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
