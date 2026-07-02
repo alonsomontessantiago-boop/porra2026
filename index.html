@@ -1438,31 +1438,31 @@ function _calcPointsRaw(player){
       if(!hayPenaltisReal){
         if(exactoMarcador&&tipoCoincide){
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto '+nombrePartido+': '+pmGl+'-'+pmGv;
+          label='⚽ Exacto: '+pmGl+'-'+pmGv;
         } else if(exactoMarcador&&!tipoCoincide){
           pts=getPts('exacto_ko_pen');
-          label='Marcador exacto pero falla 90min/prórroga '+nombrePartido;
+          label='⚽ Marcador exacto (falla 90min/prórroga)';
         } else if(aciertaGanadorPasa){
           pts=getPts('pasa_ronda');
-          label='Pasa '+nombrePartido+': '+pm.pasa;
+          label='✓ Pasa: '+pm.pasa;
         }
       } else {
         const aciertaGanadorPenaltis=hayPenaltisProno&&rmGanador&&cmp(pm.pasa,rmGanador);
         if(hayPenaltisProno && exactoMarcador && aciertaGanadorPenaltis){
           pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='Exacto penaltis '+nombrePartido+': '+pm.pasa;
+          label='⚽ Exacto penaltis, gana: '+pm.pasa+';'
         } else if(hayPenaltisProno && !exactoMarcador && aciertaGanadorPenaltis){
           pts=getPts('exacto_ko_pen');
-          label='Penaltis (acierta ganador, falla marcador) '+nombrePartido;
+          label='✓ Penaltis: gana '+rmGanador+' (falla marcador)';
         } else if(hayPenaltisProno && exactoMarcador && rmGanador && !cmp(pm.pasa,rmGanador)){
           pts=getPts('exacto_ko_pen');
-          label='Penaltis (ganador fallado) '+nombrePartido;
+          label='⚽ Empate exacto en penaltis (falla ganador)';
         } else if(exactoMarcador&&!hayPenaltisProno){
           pts=getPts('exacto_ko_pen');
-          label='Empate exacto pero no marcó penaltis '+nombrePartido;
+          label='⚽ Empate exacto (sin marcar penaltis)';
         } else if(aciertaGanadorPasa){
           pts=getPts('pasa_ronda');
-          label='Pasa '+nombrePartido+': '+pm.pasa;
+          label='✓ Pasa: '+pm.pasa;
         }
       }
 
@@ -1529,8 +1529,8 @@ function _calcPointsRaw(player){
             }
           }
         }
-        if(crucePropio) add('bracket_pts',realLocal+'-'+realVisit,getPts('bracket_cruce'),m.id);
-        if(pasaPropio) add('bracket_pts','Pasa '+realLocal+'-'+realVisit+': '+realWinner,getPts('bracket_pasa'),m.id);
+        if(crucePropio) add('bracket_pts','🎯 Cruce acertado: '+realLocal+'-'+realVisit,getPts('bracket_cruce'),m.id);
+        if(pasaPropio) add('bracket_pts','✓ Pasa bracket: '+realWinner,getPts('bracket_pasa'),m.id);
       }
     });
   }
@@ -4006,9 +4006,29 @@ function renderNormas(){
       <div class="norma-item"><span class="norma-pts" style="background:var(--goldl);color:var(--gold)">+${getPts('bracket_cuarto')}</span><span>Acertar el 4º puesto / perdedor partido 3er puesto (bracket)</span></div>
     </div>
     <div class="norma-section"><h3>📌 Fase eliminatoria (ronda a ronda)</h3>
-      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko')}</span><span>Resultado exacto KO (90min+prórroga) + acertar penaltis</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>Acertar marcador KO pero fallar ganador en penaltis</span></div>
-      <div class="norma-item"><span class="norma-pts">+${getPts('pasa_ronda')}</span><span>Acertar quién pasa de ronda (aunque no aciertes el marcador)</span></div>
+      <div style="font-size:12px;color:var(--t3);margin:0 0 8px 4px">
+        Por cada partido KO puedes sumar puntos de <b>hasta 3 fuentes distintas</b> — acumulables entre sí:
+      </div>
+      <div class="norma-item" style="border-left:3px solid var(--purple);padding-left:8px;margin-bottom:4px">
+        <b style="color:var(--t1);display:block;margin-bottom:4px">1️⃣ Bracket (pronóstico previo al Mundial)</b>
+        <span class="norma-pts">+${getPts('bracket_cruce')}</span><span>🎯 Cruce acertado — acertaste que estos dos equipos se enfrentarían en esta ronda</span>
+      </div>
+      <div class="norma-item" style="border-left:3px solid var(--purple);padding-left:8px;margin-bottom:4px">
+        <span class="norma-pts">+${getPts('bracket_pasa')}</span><span>✓ Pasa bracket — acertaste quién gana el partido en tu bracket</span>
+      </div>
+      <div class="norma-item" style="border-left:3px solid #60a5fa;padding-left:8px;margin-bottom:4px;margin-top:8px">
+        <b style="color:var(--t1);display:block;margin-bottom:4px">2️⃣ Pronóstico en directo (ronda a ronda)</b>
+        <span class="norma-pts">+${getPts('exacto_ko')+getPts('pasa_ronda')}</span><span>⚽ Exacto — acertaste el marcador Y si fue 90min/prórroga/penaltis Y quién pasa</span>
+      </div>
+      <div class="norma-item" style="border-left:3px solid #60a5fa;padding-left:8px;margin-bottom:4px">
+        <span class="norma-pts">+${getPts('exacto_ko_pen')}</span><span>⚽ Marcador exacto pero falla 90min↔prórroga, o penaltis con marcador pero falla ganador</span>
+      </div>
+      <div class="norma-item" style="border-left:3px solid #60a5fa;padding-left:8px">
+        <span class="norma-pts">+${getPts('pasa_ronda')}</span><span>✓ Pasa de ronda — solo aciertas quién avanza, sin importar el marcador</span>
+      </div>
+      <div style="background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;color:var(--t2)">
+        <b>Ejemplo:</b> Si acertaste el cruce España-Austria en tu bracket (+${getPts('bracket_cruce')}), acertaste que pasa España (+${getPts('bracket_pasa')}), y además pusiste el marcador exacto en directo (+${getPts('exacto_ko')+getPts('pasa_ronda')}), recibirías <b>+${getPts('bracket_cruce')+getPts('bracket_pasa')+getPts('exacto_ko')+getPts('pasa_ronda')} pts</b> por ese único partido.
+      </div>
     </div>
     <div class="norma-section"><h3>🏆 Clasificación final (pronóstico — independiente del bracket)</h3>
       <div class="norma-item"><span class="norma-pts">+${getPts('campeon')}</span><span>Acertar el campeón del Mundial</span></div>
@@ -6222,12 +6242,14 @@ function renderEvolucion(){
 // corta para mostrar en la card compacta del ranking (ej: "Exacto").
 function etiquetaCorta(concepto){
   const texto=concepto.split(' (+')[0]; // quitar el "(+pts)" final
+  if(texto.startsWith('⚽')) return texto.includes('penaltis')?'Exacto penaltis':texto.includes('prórroga')||texto.includes('90min')?'Exacto (falla tipo)':texto.includes('Empate')?'Exacto (falla penaltis)':'Exacto';
+  if(texto.startsWith('✓ Pasa bracket')) return 'Pasa bracket';
+  if(texto.startsWith('✓ Pasa')||texto.startsWith('Pasa')) return 'Pasa de ronda';
+  if(texto.startsWith('✓ Penaltis')) return 'Penaltis (acierta ganador)';
+  if(texto.startsWith('🎯 Cruce')) return 'Cruce acertado';
   if(texto.startsWith('Exacto')) return texto.includes('penaltis')?'Exacto (penaltis)':texto.includes('prórroga')?'Exacto (prórroga)':'Exacto';
   if(texto.startsWith('Quiniela')) return 'Quiniela';
-  if(texto.startsWith('Pasa')) return 'Pasa de ronda';
   if(texto.startsWith('Cruce')) return 'Cruce acertado';
-  // Nuevo formato de cruce: "Equipo-Equipo" (sin prefijo "Cruce") — un guion
-  // entre dos nombres y ningún ":" (eso ya lo captura la regla de "Pasa" arriba).
   if(/^[^:]+-[^:]+$/.test(texto)) return 'Cruce acertado';
   if(texto.includes('1º del grupo')||texto.includes('Grupo')&&texto.includes('1º')) return '1º de grupo';
   if(texto.includes('2º del grupo')||texto.includes('Grupo')&&texto.includes('2º')) return '2º de grupo';
