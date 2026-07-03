@@ -930,34 +930,6 @@ function resolveR32Teams(player) {
   };
 }
 
-// Resolve R16+ teams from player's bracket picks or real results
-function resolveBracketTeams(player, matchId) {
-  const p = pronosticos[player] || {};
-  // R32 - compute from predictions
-  const r32 = resolveR32Teams(player);
-  if (r32[matchId]) return r32[matchId];
-
-  // R16: winner of two R32 matches
-  // Use player's bracket pick if available, else show both options
-  const m = ALL_BRACKET.find(x => x.id === matchId);
-  if (!m) return [null, null];
-  if (m.m1 && m.m2) {
-    const pick1 = p.bracket?.[m.m1];
-    const pick2 = p.bracket?.[m.m2];
-    // Show picks if made, else show "W-M73" style
-    const t1 = pick1 || (r32[m.m1] ? `W${m.m1}` : '?');
-    const t2 = pick2 || (r32[m.m2] ? `W${m.m2}` : '?');
-    return [t1, t2];
-  }
-  // 3rd place / final
-  if (m.m1 && m.m2) {
-    const t1 = p.bracket?.[m.m1+'_loser'] || `L${m.m1}`;
-    const t2 = p.bracket?.[m.m2+'_loser'] || `L${m.m2}`;
-    return [t1, t2];
-  }
-  return [null, null];
-}
-
 // STATE
 let currentUser = null, isAdmin = false;
 let players = {};
@@ -1049,15 +1021,6 @@ window.toggleAdminSec=function(id){
   body.classList.toggle('open',!isOpen);
   arrow.classList.toggle('open',!isOpen);
 };
-function adminSec(id, icon, title, content, startOpen=false){
-  return `<div style="margin-bottom:8px">
-    <div class="admin-sec-hdr" onclick="toggleAdminSec('${id}')">
-      <h3>${icon} ${title}</h3>
-      <span class="admin-sec-arrow ${startOpen?'open':''}" id="adminarrow-${id}">▼</span>
-    </div>
-    <div class="admin-sec-body ${startOpen?'open':''}" id="adminsec-${id}">${content}</div>
-  </div>`;
-}
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
 function cmp(a,b){
   if(!a||!b) return false;
@@ -1065,7 +1028,6 @@ function cmp(a,b){
   const nb=normalizeTeam(String(b)).toLowerCase();
   return na===nb;
 }
-function cmpPool(val, pool){ if(!val||!pool) return false; return pool.some(v=>cmp(val,v)); }
 function fmtDate(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleString('es-ES',{timeZone:'Europe/Madrid'}); }catch(e){return iso;} }
 function closeModal(id){ document.getElementById(id).style.display='none'; }
 window.closeModal=closeModal;
@@ -1434,7 +1396,7 @@ function _calcPointsRaw(player){
       const kn=resultados.koNames?.[m.id]||{};
       const nombrePartido=(kn.local&&kn.visit)?(kn.local+'-'+kn.visit):m.id;
       const cat='elim';
-      const FUENTE='⚡ En directo: '; // prefijo para dejar claro que viene del pronóstico ronda a ronda (no del bracket)
+      const FUENTE='📋 Pronósticos: '; // prefijo para dejar claro que viene del pronóstico ronda a ronda (no del bracket)
 
       if(!hayPenaltisReal){
         if(exactoMarcador&&tipoCoincide){
@@ -1651,23 +1613,6 @@ function getRondaDeGlobal(matchId){
   }
   return null;
 }
-// Busca, dentro de la misma ronda que matchId, si el jugador tiene en CUALQUIER
-// casilla un cruce que coincida con realLocal/realVisit. Devuelve el ganador
-// que el jugador eligió en esa casilla encontrada (o null si no hay coincidencia).
-function buscarCruceEnRonda(player,matchId,realLocal,realVisit,getTeamsFn){
-  const ronda=getRondaDeGlobal(matchId);
-  if(!ronda||!realLocal||!realVisit) return null;
-  const idsRonda=RONDAS_BRACKET_GLOBAL[ronda];
-  const p=pronosticos[player]||{};
-  for(const otroId of idsRonda){
-    const [t1,t2]=getTeamsFn(otroId);
-    if(t1&&t2&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
-      return {matchId:otroId, pick:p.bracket?.[otroId]||null};
-    }
-  }
-  return null;
-}
-
 // ═══ RENDER: AVATAR PICKER ═══════════════════════════════
 function renderAvatarPicker(containerId, currentAv, onSelect){
   const el=document.getElementById(containerId);
@@ -1722,8 +1667,6 @@ window.toggleAvatarPicker=function(){
   el.style.display=isOpen?'none':'block';
 };
 
-
-function getRankFromSorted(name,sorted){ return sorted.findIndex(x=>x.n===name)+1; }
 
 // ═══ RENDER: RANKING ════════════════════════════════════
 
@@ -3880,6 +3823,26 @@ window._gambDeskTab=window._gambDeskTab||'partidos'; // sub-pestaña activa en D
 function renderDesglose(){
   const el=document.getElementById('avisos-content');
   if(!el) return;
+  // Agrupa una lista plana de conceptos (strings tipo "🔮 Bracket: ..." o
+  // "📋 Pronósticos: ...") en sus dos fuentes, para mostrarlas como listas
+  // separadas en vez de una sola línea mezclada.
+  function agruparPorFuente(conceptos){
+    const bracket=[], pronosticos=[], otros=[];
+    (conceptos||[]).forEach(function(c){
+      if(c.startsWith('🔮 Bracket:')) bracket.push(c.replace(/^🔮 Bracket:\s*/,''));
+      else if(c.startsWith('📋 Pronósticos:')) pronosticos.push(c.replace(/^📋 Pronósticos:\s*/,''));
+      else otros.push(c);
+    });
+    return {bracket,pronosticos,otros};
+  }
+  function fuentesHtml(conceptos){
+    const g=agruparPorFuente(conceptos);
+    let html='';
+    if(g.bracket.length) html+='<div style="margin-top:3px"><b style="color:#c084fc">🔮 Bracket:</b> '+g.bracket.join(' · ')+'</div>';
+    if(g.pronosticos.length) html+='<div style="margin-top:3px"><b style="color:#60a5fa">📋 Pronósticos:</b> '+g.pronosticos.join(' · ')+'</div>';
+    if(g.otros.length) html+='<div style="margin-top:3px">'+g.otros.join(' · ')+'</div>';
+    return html;
+  }
   try {
   const tab=window._gambDeskTab||'partidos';
 
@@ -3926,7 +3889,7 @@ function renderDesglose(){
             +'<span>'+f.jugador+'</span>'
             +'<span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span>'
             +'</div>'
-            +'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>';
+            +'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+fuentesHtml(f.conceptos)+'</div>';
         }).join('')
         :'<div style="font-size:12px;color:var(--t3);padding:8px">Nadie se llevó puntos en este partido</div>';
       var fechaMostrada=fechaPorIdDesglose[d.matchId]||d.fecha;
@@ -3941,7 +3904,7 @@ function renderDesglose(){
     if(!hist.length){ el.innerHTML=tabsHtml+'<div class="empty">Ninguna ronda de bracket cerrada todavía</div>'; return; }
     el.innerHTML=tabsHtml+[...hist].reverse().map(function(d){
       var filasHtml=d.filas.map(function(f){
-        var conceptosHtml=(f.conceptos&&f.conceptos.length)?'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+f.conceptos.join(' · ')+'</div>':'';
+        var conceptosHtml=(f.conceptos&&f.conceptos.length)?'<div style="font-size:10px;color:var(--t3);padding:0 8px 6px">'+fuentesHtml(f.conceptos)+'</div>':'';
         return '<div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--brd2);font-size:12px">'
           +'<span>'+f.jugador+'</span><span style="color:#4ade80;font-weight:700">+'+f.pts+' pts</span></div>'
           +conceptosHtml;
@@ -4014,7 +3977,7 @@ function renderNormas(){
         <span class="norma-pts">+${getPts('bracket_pasa')}</span><span>✓ Pasa bracket — acertaste quién gana el partido en tu bracket</span>
       </div>
       <div class="norma-item" style="border-left:3px solid #60a5fa;padding-left:8px;margin-bottom:4px;margin-top:8px">
-        <b style="color:var(--t1);display:block;margin-bottom:4px">2️⃣ Pronóstico en directo (ronda a ronda)</b>
+        <b style="color:var(--t1);display:block;margin-bottom:4px">2️⃣ Pronósticos (ronda a ronda)</b>
         <span class="norma-pts">+${getPts('exacto_ko')+getPts('pasa_ronda')}</span><span>⚽ Exacto — acertaste el marcador Y si fue 90min/prórroga/penaltis Y quién pasa</span>
       </div>
       <div class="norma-item" style="border-left:3px solid #60a5fa;padding-left:8px;margin-bottom:4px">
@@ -6242,7 +6205,7 @@ function etiquetaCorta(concepto){
   // Quitar los prefijos de fuente ("⚡ En directo: " / "🔮 Bracket: ") antes de
   // aplicar la lógica de siempre — la fuente ya se ve en el texto largo del
   // desglose, pero en la card corta solo interesa el motivo.
-  texto=texto.replace(/^⚡ En directo:\s*/,'').replace(/^🔮 Bracket:\s*/,'');
+  texto=texto.replace(/^📋 Pronósticos:\s*/,'').replace(/^🔮 Bracket:\s*/,'');
   if(texto.startsWith('✓ Incluye acertar quién pasa')) return 'Pasa (incluido)';
   if(texto.startsWith('⚽')) return texto.includes('penaltis')?'Exacto penaltis':texto.includes('prórroga')||texto.includes('90min')?'Exacto (falla tipo)':texto.includes('Empate')?'Exacto (falla penaltis)':'Exacto';
   if(texto.startsWith('✓ Además acierta quién pasa')) return 'Pasa bracket';
