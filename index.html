@@ -1433,40 +1433,37 @@ function _calcPointsRaw(player){
       // Nombres reales del partido (para labels legibles en el desglose)
       const kn=resultados.koNames?.[m.id]||{};
       const nombrePartido=(kn.local&&kn.visit)?(kn.local+'-'+kn.visit):m.id;
-      let pts=0, label='', cat='elim';
+      const cat='elim';
+      const FUENTE='⚡ En directo: '; // prefijo para dejar claro que viene del pronóstico ronda a ronda (no del bracket)
 
       if(!hayPenaltisReal){
         if(exactoMarcador&&tipoCoincide){
-          pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='⚽ Exacto: '+pmGl+'-'+pmGv;
+          // Antes se sumaba todo en una sola línea "Exacto: X-Y (+25)". Ahora se
+          // reparte en dos conceptos separados y explícitos para que se entienda
+          // de dónde sale cada punto (el marcador exacto YA implica acertar quién
+          // pasa, por eso el segundo concepto siempre acompaña al primero).
+          add(cat, FUENTE+'⚽ Marcador exacto '+pmGl+'-'+pmGv, getPts('exacto_ko'), m.id);
+          add(cat, FUENTE+'✓ Incluye acertar quién pasa (viene del marcador exacto)', getPts('pasa_ronda'), m.id);
         } else if(exactoMarcador&&!tipoCoincide){
-          pts=getPts('exacto_ko_pen');
-          label='⚽ Marcador exacto (falla 90min/prórroga)';
+          add(cat, FUENTE+'⚽ Marcador exacto (falla 90min/prórroga)', getPts('exacto_ko_pen'), m.id);
         } else if(aciertaGanadorPasa){
-          pts=getPts('pasa_ronda');
-          label='✓ Pasa: '+pm.pasa;
+          add(cat, FUENTE+'✓ Pasa: '+pm.pasa, getPts('pasa_ronda'), m.id);
         }
       } else {
         const aciertaGanadorPenaltis=hayPenaltisProno&&rmGanador&&cmp(pm.pasa,rmGanador);
         if(hayPenaltisProno && exactoMarcador && aciertaGanadorPenaltis){
-          pts=getPts('exacto_ko')+getPts('pasa_ronda');
-          label='⚽ Exacto penaltis, gana: '+pm.pasa+';'
+          add(cat, FUENTE+'⚽ Marcador exacto en penaltis, gana '+pm.pasa, getPts('exacto_ko'), m.id);
+          add(cat, FUENTE+'✓ Incluye acertar quién pasa (viene del marcador exacto)', getPts('pasa_ronda'), m.id);
         } else if(hayPenaltisProno && !exactoMarcador && aciertaGanadorPenaltis){
-          pts=getPts('exacto_ko_pen');
-          label='✓ Penaltis: gana '+rmGanador+' (falla marcador)';
+          add(cat, FUENTE+'✓ Penaltis: gana '+rmGanador+' (falla marcador)', getPts('exacto_ko_pen'), m.id);
         } else if(hayPenaltisProno && exactoMarcador && rmGanador && !cmp(pm.pasa,rmGanador)){
-          pts=getPts('exacto_ko_pen');
-          label='⚽ Empate exacto en penaltis (falla ganador)';
+          add(cat, FUENTE+'⚽ Empate exacto en penaltis (falla ganador)', getPts('exacto_ko_pen'), m.id);
         } else if(exactoMarcador&&!hayPenaltisProno){
-          pts=getPts('exacto_ko_pen');
-          label='⚽ Empate exacto (sin marcar penaltis)';
+          add(cat, FUENTE+'⚽ Empate exacto (sin marcar penaltis)', getPts('exacto_ko_pen'), m.id);
         } else if(aciertaGanadorPasa){
-          pts=getPts('pasa_ronda');
-          label='✓ Pasa: '+pm.pasa;
+          add(cat, FUENTE+'✓ Pasa: '+pm.pasa, getPts('pasa_ronda'), m.id);
         }
       }
-
-      if(pts>0) add(cat, label, pts, m.id);
     });
   });
 ;
@@ -1504,14 +1501,14 @@ function _calcPointsRaw(player){
         // Final y 3er puesto siguen comparando casilla exacta (solo hay una)
         const cruce_ok=myT1&&myT2&&realLocal&&realVisit&&
           ((cmp(myT1,realLocal)&&cmp(myT2,realVisit))||(cmp(myT1,realVisit)&&cmp(myT2,realLocal)));
-        if(cruce_ok) add('bracket_pts',(isFinal?'Final':'3er puesto')+' cruce',getPts('bracket_final_cruce'));
-        if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','Final ganador: '+myPick,getPts('bracket_final_gana'));
-        if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','3er puesto: '+myPick,getPts('bracket_tercero'));
+        if(cruce_ok) add('bracket_pts','🔮 Bracket: '+(isFinal?'Final':'3er puesto')+' cruce acertado',getPts('bracket_final_cruce'));
+        if(isFinal&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','🔮 Bracket: Final ganador: '+myPick,getPts('bracket_final_gana'));
+        if(is3rd&&myPick&&realWinner&&cmp(myPick,realWinner)) add('bracket_pts','🔮 Bracket: 3er puesto: '+myPick,getPts('bracket_tercero'));
         if(myPick&&myT1&&myT2){
           const myLoser=cmp(myPick,myT1)?myT2:myT1;
           const realLoser=realWinner&&realLocal&&realVisit?(cmp(realWinner,realLocal)?realVisit:realLocal):null;
-          if(isFinal&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','Subcampeón: '+myLoser,getPts('bracket_subcampeon'));
-          if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','4º puesto: '+myLoser,getPts('bracket_cuarto'));
+          if(isFinal&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','🔮 Bracket: Subcampeón: '+myLoser,getPts('bracket_subcampeon'));
+          if(is3rd&&realLoser&&cmp(myLoser,realLoser)) add('bracket_pts','🔮 Bracket: 4º puesto: '+myLoser,getPts('bracket_cuarto'));
         }
       } else {
         // R32/R16/QF/SF: buscar el cruce real en CUALQUIER casilla de la misma ronda del bracket del jugador
@@ -1529,8 +1526,8 @@ function _calcPointsRaw(player){
             }
           }
         }
-        if(crucePropio) add('bracket_pts','🎯 Cruce acertado: '+realLocal+'-'+realVisit,getPts('bracket_cruce'),m.id);
-        if(pasaPropio) add('bracket_pts','✓ Pasa bracket: '+realWinner,getPts('bracket_pasa'),m.id);
+        if(crucePropio) add('bracket_pts','🔮 Bracket: 🎯 Cruce acertado '+realLocal+'-'+realVisit,getPts('bracket_cruce'),m.id);
+        if(pasaPropio) add('bracket_pts','🔮 Bracket: ✓ Además acierta quién pasa: '+realWinner,getPts('bracket_pasa'),m.id);
       }
     });
   }
@@ -6241,8 +6238,14 @@ function renderEvolucion(){
 // Reduce un concepto largo (ej: "Exacto KO M73: 1-0 (+25)") a una etiqueta
 // corta para mostrar en la card compacta del ranking (ej: "Exacto").
 function etiquetaCorta(concepto){
-  const texto=concepto.split(' (+')[0]; // quitar el "(+pts)" final
+  let texto=concepto.split(' (+')[0]; // quitar el "(+pts)" final
+  // Quitar los prefijos de fuente ("⚡ En directo: " / "🔮 Bracket: ") antes de
+  // aplicar la lógica de siempre — la fuente ya se ve en el texto largo del
+  // desglose, pero en la card corta solo interesa el motivo.
+  texto=texto.replace(/^⚡ En directo:\s*/,'').replace(/^🔮 Bracket:\s*/,'');
+  if(texto.startsWith('✓ Incluye acertar quién pasa')) return 'Pasa (incluido)';
   if(texto.startsWith('⚽')) return texto.includes('penaltis')?'Exacto penaltis':texto.includes('prórroga')||texto.includes('90min')?'Exacto (falla tipo)':texto.includes('Empate')?'Exacto (falla penaltis)':'Exacto';
+  if(texto.startsWith('✓ Además acierta quién pasa')) return 'Pasa bracket';
   if(texto.startsWith('✓ Pasa bracket')) return 'Pasa bracket';
   if(texto.startsWith('✓ Pasa')||texto.startsWith('Pasa')) return 'Pasa de ronda';
   if(texto.startsWith('✓ Penaltis')) return 'Penaltis (acierta ganador)';
