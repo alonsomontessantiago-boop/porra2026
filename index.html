@@ -1021,29 +1021,11 @@ window.toggleAdminSec=function(id){
   body.classList.toggle('open',!isOpen);
   arrow.classList.toggle('open',!isOpen);
 };
-// Cruces OFICIALES de octavos de final, verificados contra 3 fuentes
-// periodísticas independientes (DAZN, ElComercio, TUDN) y cruzados con los
-// venues ya hardcodeados en ALL_BRACKET (M91=Nueva York, M92=Azteca,
-// M93=Dallas, M94=Seattle, M95=Atlanta, M96=Vancouver — coinciden exacto).
-// ⚠️ M89/M90 tienen una pequeña incertidumbre entre 2 fuentes que discrepan
-// en el orden exacto Paraguay-Francia / Canadá-Marruecos.
-const OCTAVOS_OFICIALES={
-  M89:{local:'Paraguay', visit:'Francia'},
-  M90:{local:'Canadá',   visit:'Marruecos'},
-  M91:{local:'Brasil',   visit:'Noruega'},
-  M92:{local:'México',   visit:'Inglaterra'},
-  M93:{local:'Portugal', visit:'España'},
-  M94:{local:'EEUU',     visit:'Bélgica'},
-  M95:{local:'Argentina',visit:'Egipto'},
-  M96:{local:'Suiza',    visit:'Colombia'},
-};
-// Devuelve los nombres reales (local/visit) de un partido KO: primero mira lo
-// que haya guardado el admin en Firestore, y si no hay nada, cae automática-
-// mente en el cruce OFICIAL verificado. Así los jugadores ven el partido
-// correcto desde el primer segundo, sin depender de que alguien pulse un
-// botón de guardar en Admin.
+// Devuelve los nombres reales (local/visit) de un partido KO tal cual estén
+// guardados en Firestore (resultados.koNames). Sin ningún dato de relleno:
+// si el admin no lo ha metido todavía, devuelve {} y ya está.
 function getKN(matchId){
-  return (resultados.koNames && resultados.koNames[matchId]) || OCTAVOS_OFICIALES[matchId] || {};
+  return (resultados.koNames && resultados.koNames[matchId]) || {};
 }
 
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
@@ -4197,11 +4179,6 @@ function renderAdmin(){
     }
     const m=ALL_BRACKET.find(x=>x.id===matchId);
     if(!m) return [];
-    // Si hay un cruce oficial conocido para este partido (ver OCTAVOS_OFICIALES),
-    // se incluye siempre como candidato válido aunque el admin aún no haya
-    // marcado el "ganador" de los partidos que alimentan a este — así no sale
-    // el feo "(no detectado)" en el desplegable cuando ya sabemos el cruce real.
-    const oficial=OCTAVOS_OFICIALES[matchId];
     // Rondas siguientes: candidatos = ganadores reales de los partidos que alimentan este
     const fuentes=[m.m1,m.m2].filter(Boolean);
     const cands=fuentes.map(src=>{
@@ -4215,7 +4192,6 @@ function renderAdmin(){
       if(!kn.local||!kn.visit) return null;
       return cmp(rm.ganador,kn.local)?kn.visit:kn.local;
     }).filter(Boolean);
-    if(oficial) cands.push(oficial.local, oficial.visit);
     return [...new Set(cands)];
   }
 
@@ -4264,7 +4240,6 @@ function renderAdmin(){
         <span class="admin-sec-arrow" id="adminarrow-${secId}">▼</span>
       </div>
       <div class="admin-sec-body" id="adminsec-${secId}" style="padding:10px">
-        ${phase==='R16'?'<button type="button" class="btn btn-o" style="margin-bottom:10px;font-size:11px;width:100%" onclick="event.stopPropagation();corregirOctavosOficiales()">🔧 Autocompletar cruces oficiales de Octavos (M89-M96)</button>':''}
         ${matchesHtml}
       </div>
     </div>`;
@@ -5129,30 +5104,6 @@ window.guardarGrupos=async function(){
   }
   showToast('✅ Grupos guardados');
   renderAdmin();
-};
-
-// Cruces OFICIALES de octavos de final: ver definición junto a getKN() más
-// arriba en el archivo (se usa como fallback automático en getKN).
-window.corregirOctavosOficiales=function(){
-  if(!confirm('Esto va a rellenar (o sobrescribir) los equipos de M89-M96:\n\n'+
-
-    Object.entries(OCTAVOS_OFICIALES).map(([id,t])=>id+': '+t.local+' vs '+t.visit).join('\n')+
-    '\n\n⚠️ M89 y M90 tienen una pequeña duda entre fuentes sobre cuál es cuál (Paraguay-Francia / Canadá-Marruecos) — verifícalo tú si lo sabes seguro. M91-M96 están confirmados por 3 fuentes distintas.\n\n¿Seguro? Pulsa "💾 Guardar eliminatoria" después para que se guarde de verdad.')) return;
-  Object.entries(OCTAVOS_OFICIALES).forEach(([id,t])=>{
-    const selLocal=document.getElementById('ko-'+id+'-local');
-    const selVisit=document.getElementById('ko-'+id+'-visit');
-    // Los <select> de koTeamSelect solo listan "candidatos" ya calculados; si el
-    // equipo oficial no está entre las opciones (por ejemplo porque el bracket
-    // de algún jugador todavía no lo contemplaba), lo añadimos igualmente para
-    // no perder el dato.
-    [[selLocal,t.local],[selVisit,t.visit]].forEach(([sel,val])=>{
-      if(!sel) return;
-      const yaExiste=Array.from(sel.options).some(o=>o.value===val);
-      if(!yaExiste){ const opt=document.createElement('option'); opt.value=val; opt.textContent=val; sel.appendChild(opt); }
-      sel.value=val;
-    });
-  });
-  showToast('✓ Octavos rellenados — ahora pulsa "💾 Guardar eliminatoria"');
 };
 
 window.guardarKO=async function(){
