@@ -4233,6 +4233,7 @@ function renderAdmin(){
         <span class="admin-sec-arrow" id="adminarrow-${secId}">▼</span>
       </div>
       <div class="admin-sec-body" id="adminsec-${secId}" style="padding:10px">
+        ${phase==='R16'?'<button type="button" class="btn btn-o" style="margin-bottom:10px;font-size:11px;width:100%" onclick="event.stopPropagation();corregirOctavosOficiales()">🔧 Autocompletar cruces oficiales de Octavos (M89-M96)</button>':''}
         ${matchesHtml}
       </div>
     </div>`;
@@ -5097,6 +5098,40 @@ window.guardarGrupos=async function(){
   }
   showToast('✅ Grupos guardados');
   renderAdmin();
+};
+
+// Cruces OFICIALES de octavos de final confirmados contra la app oficial de la
+// FIFA (no son una suposición): si algún cruce cambiara en la realidad habría
+// que tocar esta tabla, pero a fecha de esta sesión son estos.
+const OCTAVOS_OFICIALES={
+  M89:{local:'Brasil',   visit:'Noruega'},
+  M90:{local:'México',   visit:'Inglaterra'},
+  M91:{local:'Argentina',visit:'Egipto'},
+  M92:{local:'Suiza',    visit:'Colombia'},
+  M93:{local:'Canadá',   visit:'Marruecos'},
+  M94:{local:'Paraguay', visit:'Francia'},
+  M95:{local:'Portugal', visit:'España'},
+  M96:{local:'EEUU',     visit:'Bélgica'},
+};
+window.corregirOctavosOficiales=function(){
+  if(!confirm('Esto va a rellenar (o sobrescribir) los equipos de M89-M96 con el cruce oficial confirmado:\n\n'+
+    Object.entries(OCTAVOS_OFICIALES).map(([id,t])=>id+': '+t.local+' vs '+t.visit).join('\n')+
+    '\n\n¿Seguro? Pulsa "💾 Guardar eliminatoria" después para que se guarde de verdad.')) return;
+  Object.entries(OCTAVOS_OFICIALES).forEach(([id,t])=>{
+    const selLocal=document.getElementById('ko-'+id+'-local');
+    const selVisit=document.getElementById('ko-'+id+'-visit');
+    // Los <select> de koTeamSelect solo listan "candidatos" ya calculados; si el
+    // equipo oficial no está entre las opciones (por ejemplo porque el bracket
+    // de algún jugador todavía no lo contemplaba), lo añadimos igualmente para
+    // no perder el dato.
+    [[selLocal,t.local],[selVisit,t.visit]].forEach(([sel,val])=>{
+      if(!sel) return;
+      const yaExiste=Array.from(sel.options).some(o=>o.value===val);
+      if(!yaExiste){ const opt=document.createElement('option'); opt.value=val; opt.textContent=val; sel.appendChild(opt); }
+      sel.value=val;
+    });
+  });
+  showToast('✓ Octavos rellenados — ahora pulsa "💾 Guardar eliminatoria"');
 };
 
 window.guardarKO=async function(){
