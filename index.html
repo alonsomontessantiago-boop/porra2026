@@ -4197,6 +4197,11 @@ function renderAdmin(){
     }
     const m=ALL_BRACKET.find(x=>x.id===matchId);
     if(!m) return [];
+    // Si hay un cruce oficial conocido para este partido (ver OCTAVOS_OFICIALES),
+    // se incluye siempre como candidato válido aunque el admin aún no haya
+    // marcado el "ganador" de los partidos que alimentan a este — así no sale
+    // el feo "(no detectado)" en el desplegable cuando ya sabemos el cruce real.
+    const oficial=OCTAVOS_OFICIALES[matchId];
     // Rondas siguientes: candidatos = ganadores reales de los partidos que alimentan este
     const fuentes=[m.m1,m.m2].filter(Boolean);
     const cands=fuentes.map(src=>{
@@ -4210,6 +4215,7 @@ function renderAdmin(){
       if(!kn.local||!kn.visit) return null;
       return cmp(rm.ganador,kn.local)?kn.visit:kn.local;
     }).filter(Boolean);
+    if(oficial) cands.push(oficial.local, oficial.visit);
     return [...new Set(cands)];
   }
 
