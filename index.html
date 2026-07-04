@@ -1021,6 +1021,31 @@ window.toggleAdminSec=function(id){
   body.classList.toggle('open',!isOpen);
   arrow.classList.toggle('open',!isOpen);
 };
+// Cruces OFICIALES de octavos de final, verificados contra 3 fuentes
+// periodísticas independientes (DAZN, ElComercio, TUDN) y cruzados con los
+// venues ya hardcodeados en ALL_BRACKET (M91=Nueva York, M92=Azteca,
+// M93=Dallas, M94=Seattle, M95=Atlanta, M96=Vancouver — coinciden exacto).
+// ⚠️ M89/M90 tienen una pequeña incertidumbre entre 2 fuentes que discrepan
+// en el orden exacto Paraguay-Francia / Canadá-Marruecos.
+const OCTAVOS_OFICIALES={
+  M89:{local:'Paraguay', visit:'Francia'},
+  M90:{local:'Canadá',   visit:'Marruecos'},
+  M91:{local:'Brasil',   visit:'Noruega'},
+  M92:{local:'México',   visit:'Inglaterra'},
+  M93:{local:'Portugal', visit:'España'},
+  M94:{local:'EEUU',     visit:'Bélgica'},
+  M95:{local:'Argentina',visit:'Egipto'},
+  M96:{local:'Suiza',    visit:'Colombia'},
+};
+// Devuelve los nombres reales (local/visit) de un partido KO: primero mira lo
+// que haya guardado el admin en Firestore, y si no hay nada, cae automática-
+// mente en el cruce OFICIAL verificado. Así los jugadores ven el partido
+// correcto desde el primer segundo, sin depender de que alguien pulse un
+// botón de guardar en Admin.
+function getKN(matchId){
+  return (resultados.koNames && resultados.koNames[matchId]) || OCTAVOS_OFICIALES[matchId] || {};
+}
+
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
 function cmp(a,b){
   if(!a||!b) return false;
@@ -1393,7 +1418,7 @@ function _calcPointsRaw(player){
       const aciertaGanadorPasa=rmGanador&&cmp(pm.pasa,rmGanador);
 
       // Nombres reales del partido (para labels legibles en el desglose)
-      const kn=resultados.koNames?.[m.id]||{};
+      const kn=getKN(m.id);
       const nombrePartido=(kn.local&&kn.visit)?(kn.local+'-'+kn.visit):m.id;
       const cat='elim';
       const FUENTE='📋 Pronósticos: '; // prefijo para dejar claro que viene del pronóstico ronda a ronda (no del bracket)
@@ -1452,8 +1477,8 @@ function _calcPointsRaw(player){
     ALL_BRACKET.forEach(m=>{
       const myPick=p.bracket[m.id];
       const realWinner=partidos['KO_'+m.id]?.ganador;
-      const realLocal=resultados.koNames?.[m.id]?.local||partidos['KO_'+m.id]?.local;
-      const realVisit=resultados.koNames?.[m.id]?.visit||partidos['KO_'+m.id]?.visit;
+      const realLocal=getKN(m.id).local||partidos['KO_'+m.id]?.local;
+      const realVisit=getKN(m.id).visit||partidos['KO_'+m.id]?.visit;
       const isFinal=m.id==='M104';
       const is3rd=m.id==='M103';
 
@@ -2098,7 +2123,7 @@ function renderPronosticos(){
         const k='KO_'+m.id;
         const pm=p.partidos?.[k]||{};
         const rm=partidos[k];
-        const kn=res.koNames?.[m.id]||{};
+        const kn=getKN(m.id);
         const localL=kn.local||m.desc?.split(' vs ')[0]||'Equipo A';
         const visitL=kn.visit||m.desc?.split(' vs ')[1]||'Equipo B';
         const exacto=rm&&pm.gl!=null&&Number(pm.gl)===Number(rm.gl)&&Number(pm.gv)===Number(rm.gv);
@@ -2291,8 +2316,8 @@ function renderBracket(){
     const idsRonda=(phase==='R32'||phase==='R16'||phase==='QF'||phase==='SF')?(RONDAS_BRACKET_GLOBAL[phase]||[]):[];
     if(idsRonda.length&&t1&&t2){
       for(const otroId of idsRonda){
-        const realLocal=resultados.koNames?.[otroId]?.local||partidos['KO_'+otroId]?.local;
-        const realVisit=resultados.koNames?.[otroId]?.visit||partidos['KO_'+otroId]?.visit;
+        const realLocal=getKN(otroId).local||partidos['KO_'+otroId]?.local;
+        const realVisit=getKN(otroId).visit||partidos['KO_'+otroId]?.visit;
         if(realLocal&&realVisit&&((cmp(t1,realLocal)&&cmp(t2,realVisit))||(cmp(t1,realVisit)&&cmp(t2,realLocal)))){
           crucePropioOk=true;
           crucePropioConfirmado=true;
@@ -2308,8 +2333,8 @@ function renderBracket(){
     let crucePropioFallido=false;
     if(idsRonda.length&&t1&&t2&&!crucePropioOk){
       const todosConfirmados=idsRonda.every(id=>{
-        const l=resultados.koNames?.[id]?.local||partidos['KO_'+id]?.local;
-        const v=resultados.koNames?.[id]?.visit||partidos['KO_'+id]?.visit;
+        const l=getKN(id).local||partidos['KO_'+id]?.local;
+        const v=getKN(id).visit||partidos['KO_'+id]?.visit;
         return l&&v;
       });
       if(todosConfirmados) crucePropioFallido=true;
@@ -2487,7 +2512,7 @@ window.showBracketMatch=function(matchId){
     t1 = pair[0]||'Por definir';
     t2 = pair[1]||'Por definir';
   } else {
-    const kn=resultados.koNames?.[matchId]||{};
+    const kn=getKN(matchId);
     t1 = kn.local || (m.m1?`Ganador ${m.m1}`:'Equipo A');
     t2 = kn.visit || (m.m2?`Ganador ${m.m2}`:'Equipo B');
   }
@@ -2602,7 +2627,7 @@ function renderPartidos(){
   getAllBracket().forEach(m=>{
     const k='KO_'+m.id;
     const rm=partidos[k];
-    const kn=resultados.koNames?.[m.id]||{};
+    const kn=getKN(m.id);
     const local=kn.local||'Por definir';
     const visit=kn.visit||'Por definir';
     if(search&&!local.toLowerCase().includes(search)&&!visit.toLowerCase().includes(search)) return;
@@ -4203,7 +4228,7 @@ function renderAdmin(){
     const conResultado=matches.filter(m=>{const rm=partidos['KO_'+m.id]||{}; return rm.gl!=null&&rm.gv!=null;}).length;
     const secId='koph-'+phase;
     const matchesHtml=matches.map(m=>{
-      const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=res.koNames?.[k]||{};
+      const k=m.id; const rm=partidos['KO_'+k]||{}; const kn=getKN(k);
       const fechaLabel=m.date?fmtDate(m.date).split(',')[0]:'';
       const cands=getCandidatosPartido(k);
       const candsPartido=[kn.local,kn.visit].filter(Boolean); // ganador solo puede ser uno de los dos equipos de ESTE partido
@@ -5100,23 +5125,13 @@ window.guardarGrupos=async function(){
   renderAdmin();
 };
 
-// Cruces OFICIALES de octavos de final confirmados contra la app oficial de la
-// FIFA (no son una suposición): si algún cruce cambiara en la realidad habría
-// que tocar esta tabla, pero a fecha de esta sesión son estos.
-const OCTAVOS_OFICIALES={
-  M89:{local:'Brasil',   visit:'Noruega'},
-  M90:{local:'México',   visit:'Inglaterra'},
-  M91:{local:'Argentina',visit:'Egipto'},
-  M92:{local:'Suiza',    visit:'Colombia'},
-  M93:{local:'Canadá',   visit:'Marruecos'},
-  M94:{local:'Paraguay', visit:'Francia'},
-  M95:{local:'Portugal', visit:'España'},
-  M96:{local:'EEUU',     visit:'Bélgica'},
-};
+// Cruces OFICIALES de octavos de final: ver definición junto a getKN() más
+// arriba en el archivo (se usa como fallback automático en getKN).
 window.corregirOctavosOficiales=function(){
-  if(!confirm('Esto va a rellenar (o sobrescribir) los equipos de M89-M96 con el cruce oficial confirmado:\n\n'+
+  if(!confirm('Esto va a rellenar (o sobrescribir) los equipos de M89-M96:\n\n'+
+
     Object.entries(OCTAVOS_OFICIALES).map(([id,t])=>id+': '+t.local+' vs '+t.visit).join('\n')+
-    '\n\n¿Seguro? Pulsa "💾 Guardar eliminatoria" después para que se guarde de verdad.')) return;
+    '\n\n⚠️ M89 y M90 tienen una pequeña duda entre fuentes sobre cuál es cuál (Paraguay-Francia / Canadá-Marruecos) — verifícalo tú si lo sabes seguro. M91-M96 están confirmados por 3 fuentes distintas.\n\n¿Seguro? Pulsa "💾 Guardar eliminatoria" después para que se guarde de verdad.')) return;
   Object.entries(OCTAVOS_OFICIALES).forEach(([id,t])=>{
     const selLocal=document.getElementById('ko-'+id+'-local');
     const selVisit=document.getElementById('ko-'+id+'-visit');
@@ -5202,7 +5217,7 @@ window.guardarKO=async function(){
     const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
     if(!idsRonda.length) continue;
     const todosConfirmados=idsRonda.every(id=>{
-      const kn=resultados.koNames?.[id]||{};
+      const kn=getKN(id);
       return kn.local&&kn.visit;
     });
     const yaGenerado=(resultados.historialBracketRondas||[]).some(d=>d.ronda===faseLabel);
@@ -5599,7 +5614,7 @@ window.recalcularRondaBracket=async function(faseId){
   calcPoints._cache={};
   const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
   const todosConfirmados=idsRonda.every(id=>{
-    const kn=resultados.koNames?.[id]||{};
+    const kn=getKN(id);
     return kn.local&&kn.visit;
   });
   if(!todosConfirmados){ alert('⚠️ Todavía no están confirmados todos los cruces de '+label+'. Completa "Equipo local/visitante real" de los '+idsRonda.length+' partidos primero.'); return; }
@@ -5638,7 +5653,7 @@ window.generarHistorialRetroactivo=async function(){
   getAllBracket().forEach(m=>{
     const rm=partidos['KO_'+m.id];
     if(rm&&rm.gl!=null){
-      const kn=resultados.koNames?.[m.id]||{};
+      const kn=getKN(m.id);
       let marcadorTxt=rm.gl+'-'+rm.gv;
       if(rm.tipo==='prorroga') marcadorTxt+=' (prórroga)';
       else if(rm.tipo==='penaltis') marcadorTxt+=' (pen: '+(rm.ganador||'?')+')';
@@ -5660,7 +5675,7 @@ window.generarHistorialRetroactivo=async function(){
     const idsRonda=RONDAS_BRACKET_GLOBAL[faseId]||[];
     if(!idsRonda.length) continue;
     const todosConfirmados=idsRonda.every(id=>{
-      const kn=resultados.koNames?.[id]||{};
+      const kn=getKN(id);
       return kn.local&&kn.visit;
     });
     if(todosConfirmados){
@@ -5971,7 +5986,7 @@ function renderComparador(){
       matches.forEach(m=>{
         const k='KO_'+m.id;
         const rm=partidos[k];
-        const kn=res.koNames?.[m.id]||{};
+        const kn=getKN(m.id);
         const localL=kn.local||m.desc?.split(' vs ')[0]||'Equipo A';
         const visitL=kn.visit||m.desc?.split(' vs ')[1]||'Equipo B';
         const realGl=rm?.gl, realGv=rm?.gv;
@@ -6314,7 +6329,7 @@ function renderPartidoDelDia(){
   // terminar los 72 partidos de grupos.
   const gruposMatches=Object.entries(FIXTURE_DATES).map(([id,m])=>({id,local:m.local,visit:m.visit,date:m.date}));
   const koMatches=getAllBracket().map(m=>{
-    const kn=resultados.koNames?.[m.id]||{};
+    const kn=getKN(m.id);
     return {id:'KO_'+m.id, local:kn.local||m.desc?.split(' vs ')[0]||'?', visit:kn.visit||m.desc?.split(' vs ')[1]||'?', date:m.date};
   }).filter(m=>m.date); // solo partidos con fecha conocida
   const allMatches=[...gruposMatches,...koMatches].map(m=>[m.id,m]).sort((a,b)=>(a[1].date||'').localeCompare(b[1].date||''));
