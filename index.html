@@ -1211,12 +1211,23 @@ window.registrar=async function(){
   setTimeout(()=>showOnboarding(),500);
 };
 
+window.olvidarAdminDispositivo=function(){
+  if(!confirm('¿Olvidar el acceso admin en este dispositivo? La próxima vez que entres como '+currentUser+' te pedirá la contraseña otra vez.')) return;
+  try{ localStorage.removeItem('admin_ok_'+currentUser); }catch(e){}
+  isAdmin=false;
+  document.getElementById('admin-tab').style.display='none';
+  go('ranking');
+};
+
 window.checkAdmin=function(){
   if(document.getElementById('admin-pw').value===ADMIN_PASS){
     isAdmin=true;
-    if(currentUser) document.getElementById('admin-tab').style.display='flex';
+    if(currentUser){
+      document.getElementById('admin-tab').style.display='flex';
+      try{ localStorage.setItem('admin_ok_'+currentUser,'1'); }catch(e){}
+    }
     document.getElementById('admin-pw').value='';
-    alert('✅ Acceso admin activado');
+    alert('✅ Acceso admin activado (recordado en este dispositivo)');
   } else alert('Contraseña incorrecta');
 };
 
@@ -1235,6 +1246,7 @@ window.checkAdminFromMenu=function(){
   if(!pw) return;
   if(pw.value===ADMIN_PASS){
     isAdmin=true;
+    if(currentUser){ try{ localStorage.setItem('admin_ok_'+currentUser,'1'); }catch(e){} }
     pw.value='';
     document.getElementById('detail-modal').style.display='none';
     go('admin');
@@ -1247,6 +1259,10 @@ window.checkAdminFromMenu=function(){
 
 async function doLogin(name){
   currentUser=name;
+  // Si este dispositivo ya activó el admin para este jugador anteriormente
+  // (ver checkAdmin/checkAdminFromMenu), se recuerda y no hace falta repetir
+  // la contraseña cada vez.
+  try{ if(localStorage.getItem('admin_ok_'+name)==='1') isAdmin=true; }catch(e){}
   await loadAllPronos();
   document.getElementById('login-page').classList.remove('on');
   document.getElementById('user-bar').style.display='flex';
@@ -1267,6 +1283,7 @@ async function doLogin(name){
   }
   document.getElementById('tabs').style.display='none';
   document.getElementById('user-bar').style.display='flex';
+  if(isAdmin) document.getElementById('admin-tab').style.display='flex';
   // Restore last tab or go to ranking
   let startTab='ranking';
   try{const saved=sessionStorage.getItem('porra_tab');if(saved)startTab=saved;}catch(e){}
@@ -2184,11 +2201,11 @@ function renderPronosticos(){
     </div>
     <div class="card">
       <div class="card-title">⚽ Goleadores / Asistentes / Balón</div>
-      ${['gol1','gol2','gol3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} goleador (+${getPts(k)} pts)</label>
+      ${['gol1','gol2','gol3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} goleador (+${getPts('premio_pos')} pts)</label>
         <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
-      ${['asist1','asist2','asist3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} asistente (+${getPts(k)} pts)</label>
+      ${['asist1','asist2','asist3'].map((k,i)=>`<div class="field"><label>${['1er','2º','3er'][i]} asistente (+${getPts('premio_pos')} pts)</label>
         <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
-      ${['balon1','balon2','balon3'].map((k,i)=>`<div class="field"><label>Balón de ${['Oro','Plata','Bronce'][i]} (+${getPts(k)} pts)</label>
+      ${['balon1','balon2','balon3'].map((k,i)=>`<div class="field"><label>Balón de ${['Oro','Plata','Bronce'][i]} (+${getPts('premio_pos')} pts)</label>
         <input class="fi" type="text" id="pf-${k}" value="${esc(p[k]||'')}" ${locked?'readonly':''} placeholder="Nombre del jugador..."></div>`).join('')}
     </div>`;
 
@@ -4649,6 +4666,9 @@ function renderAdmin(){
     </div>`;
 
   document.getElementById('admin-content').innerHTML=`
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-o btn-sm" onclick="olvidarAdminDispositivo()">🔒 Olvidar admin en este dispositivo</button>
+    </div>
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec1')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">📢 Enviar aviso</h3><span class="admin-sec-arrow" id="adminarrow-sec1">▼</span></div><div class="admin-sec-body" id="adminsec-sec1">
       <div class="field"><input type="text" class="fi" id="av-msg" placeholder="Mensaje para todos..."></div>
       <button class="btn btn-p btn-sm" onclick="enviarAviso()">Enviar</button>
@@ -4695,6 +4715,24 @@ function renderAdmin(){
       <p class="note">Introduce el orden real de clasificación de cada grupo.</p>
       ${gruposResHtml}
       <button class="btn btn-p btn-sm" onclick="guardarTablas()">Guardar tablas</button>
+    </div></div>
+    <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec5b')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🏆 Clasificación final real (Campeón/Semis/3º)</h3><span class="admin-sec-arrow" id="adminarrow-sec5b">▼</span></div><div class="admin-sec-body" id="adminsec-sec5b">
+      <div class="res-row"><label>Campeón</label>
+        <select class="fi" id="ar-real_campeon">
+          <option value="">Selecciona...</option>
+          ${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(res.campeon,t)?'selected':''}>${t}</option>`).join('')}
+        </select></div>
+      ${[1,2,3,4].map(i=>`<div class="res-row"><label>Semifinalista ${i}</label>
+        <select class="fi" id="ar-real_semi${i}">
+          <option value="">Selecciona...</option>
+          ${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(res['semi'+i],t)?'selected':''}>${t}</option>`).join('')}
+        </select></div>`).join('')}
+      <div class="res-row"><label>3er puesto</label>
+        <select class="fi" id="ar-real_tercero">
+          <option value="">Selecciona...</option>
+          ${ALL_TEAMS.map(t=>`<option value="${t}" ${cmp(res.tercero,t)?'selected':''}>${t}</option>`).join('')}
+        </select></div>
+      <button class="btn btn-p btn-sm" onclick="guardarClasificacionFinal()">Guardar clasificación final</button>
     </div></div>
     <div style="margin-bottom:8px"><div class="admin-sec-hdr" onclick="toggleAdminSec('sec6')"><h3 style="margin:0;font-size:13px;font-weight:800;color:var(--gold)">🎯 Mejores terceros reales</h3><span class="admin-sec-arrow" id="adminarrow-sec6">▼</span></div><div class="admin-sec-body" id="adminsec-sec6">
       ${Array.from({length:8},(_,i)=>{
@@ -4992,6 +5030,23 @@ window.guardarTablas=async function(){
   calcPoints._cache={};
   await guardarHistorialRanking(); // Actualizar caché de puntos del login
   showToast('✅ Tablas guardadas');
+  renderAdmin();
+  renderRanking();
+};
+
+window.guardarClasificacionFinal=async function(){
+  const res=JSON.parse(JSON.stringify(resultados));
+  const campeon=document.getElementById('ar-real_campeon')?.value||'';
+  res.campeon=campeon;
+  for(let i=1;i<=4;i++){
+    const el=document.getElementById('ar-real_semi'+i);
+    res['semi'+i]=el?el.value:'';
+  }
+  res.tercero=document.getElementById('ar-real_tercero')?.value||'';
+  await setDoc(doc(db,'meta','resultados'),res);
+  calcPoints._cache={};
+  await guardarHistorialRanking();
+  showToast('✅ Clasificación final guardada');
   renderAdmin();
   renderRanking();
 };
